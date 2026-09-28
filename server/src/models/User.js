@@ -33,6 +33,12 @@ const userSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    email: {
+      type: String,
+      lowercase: true,
+      trim: true,
+      sparse: true,
+    },
     notificationPreferences: {
       promptPurchased: { type: Boolean, default: true },
       promptUpdated: { type: Boolean, default: true },

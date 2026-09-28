@@ -14,4 +14,10 @@
 
 Moderation deliberately has no API action for hiding or featuring prompts: those are marketplace/contract state changes and must continue through the contract's authorized owner/creator flow. An unset `MODERATOR_ADDRESSES` denies moderation access rather than granting it.
 
+## Reported listing snapshots
+
+When a listing is reported, the report stores an immutable snapshot of the listing's public fields as they were at report time (title, category, creator, price, image, tags, and capture time). Listings can be edited, archived, or deleted before a moderator reviews the report, so the snapshot preserves the evidence that was actually reported. Gated prompt content is never copied.
+
+`POST /api/moderation/report` accepts an optional `listingSnapshot` object; it is normalized and length-bounded before storage, and ignored for `review` and `user` targets. The captured snapshot is returned with the report in `GET /api/moderation/queue` and in the Express `GET /api/user/reports` response, and is rendered in the moderation queue.
+
 These endpoints are additive. Existing callers that request only `promptId` continue to receive the first page sorted newest-first; pagination and filter metadata are additional fields.

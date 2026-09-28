@@ -8,6 +8,7 @@ import {
   compareModerationPriority,
   getModerationPriority,
 } from "../services/moderationPriority";
+import { buildListingSnapshotFromPrompt } from "../services/listingSnapshot";
 import { buildReportAssignmentUpdate } from "../services/moderationAssignment";
 import { buildCollaborationNotesUpdate } from "../services/moderationNotes";
 import { streamText } from "ai";
@@ -378,12 +379,17 @@ export const SubmitPromptReport = asyncRoute(async (req, res) => {
     throw new AppError("Prompt not found", 404);
   }
 
+  // Capture the listing's public state now so moderators can review what was
+  // reported even if the listing is later edited or removed (#737).
+  const listingSnapshot = buildListingSnapshotFromPrompt(prompt);
+
   // Create new report
   const newReport = new Report({
     promptId,
     reporterAddress: reporterAddress.toLowerCase(),
     reason,
     description: description || "",
+    ...(listingSnapshot ? { listingSnapshot } : {}),
   });
 
   await newReport.save();

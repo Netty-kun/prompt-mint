@@ -1,3 +1,11 @@
+export type ReviewModerationStatus = "approved" | "edited" | "removed";
+
+export interface ReviewModerationDecision {
+  status: ReviewModerationStatus;
+  reason: string;
+  decidedAt?: number;
+}
+
 export interface Review {
   id: string;
   promptId: string;
@@ -7,6 +15,7 @@ export interface Review {
   createdAt: number;
   verified: boolean;
   helpfulVotes: number;
+  moderationDecision?: ReviewModerationDecision | null;
   sellerResponse?: {
     text: string;
     createdAt: number;

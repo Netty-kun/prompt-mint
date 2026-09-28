@@ -22,6 +22,11 @@ function seedMockReviews() {
             verified: true,
             helpfulVotes: 1,
             voters: [],
+            moderationDecision: {
+                status: "removed",
+                reason: "Inappropriate content",
+                decidedAt: Date.now() - 86400000 * 3,
+            },
         },
         {
             id: "review_3",
@@ -55,6 +60,14 @@ export function addReview(review) {
 export function findReview(promptId, reviewId) {
     const reviews = reviewStorage.get(promptId) || [];
     return reviews.find((r) => r.id === reviewId);
+}
+export function findReviewById(reviewId) {
+    for (const reviews of reviewStorage.values()) {
+        const review = reviews.find((item) => item.id === reviewId);
+        if (review)
+            return review;
+    }
+    return undefined;
 }
 export function updateReview(promptId, reviewId, update) {
     const reviews = reviewStorage.get(promptId) || [];

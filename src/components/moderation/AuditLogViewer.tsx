@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Shield, Search, Filter, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import { Shield, Search, Filter, ChevronLeft, ChevronRight, AlertTriangle, Download } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
@@ -29,6 +29,7 @@ interface LogsResponse {
 
 interface AuditLogViewerProps {
   moderatorAddress: string;
+  signMessage: (_message: string) => Promise<{ signedMessage?: string } | string>;
   apiBase?: string;
 }
 
@@ -65,7 +66,7 @@ const formatAddress = (address: string) => {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 };
 
-export const AuditLogViewer = ({ moderatorAddress, apiBase = "/api/moderation/logs" }: AuditLogViewerProps) => {
+export const AuditLogViewer = ({ moderatorAddress, signMessage, apiBase = "/api/moderation/logs" }: AuditLogViewerProps) => {
   const [logs, setLogs] = useState<ModerationLogEntry[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -74,6 +75,7 @@ export const AuditLogViewer = ({ moderatorAddress, apiBase = "/api/moderation/lo
   const [filterAction, setFilterAction] = useState("");
   const [filterType, setFilterType] = useState("");
   const [searchTarget, setSearchTarget] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
 
   const fetchLogs = useCallback(async () => {
     setIsLoading(true);
@@ -111,6 +113,48 @@ export const AuditLogViewer = ({ moderatorAddress, apiBase = "/api/moderation/lo
     fetchLogs();
   };
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    setError(null);
+    try {
+      const challengeResponse = await fetch("/api/reviews/audit-export-challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: moderatorAddress }),
+      });
+      if (!challengeResponse.ok) {
+        const data = await challengeResponse.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to request export challenge");
+      }
+
+      const challenge = await challengeResponse.json();
+      const signature = await signMessage(challenge.challenge);
+      const signedMessage = typeof signature === "string" ? signature : signature?.signedMessage;
+      if (!signedMessage) throw new Error("Wallet did not return a signed message");
+
+      const exportResponse = await fetch("/api/reviews/audit-export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: moderatorAddress, token: challenge.token, signedMessage }),
+      });
+      if (!exportResponse.ok) {
+        const data = await exportResponse.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to export review edits");
+      }
+
+      const downloadUrl = URL.createObjectURL(await exportResponse.blob());
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = "review-edit-audit.csv";
+      link.click();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to export review edits");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (!moderatorAddress) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -122,9 +166,20 @@ export const AuditLogViewer = ({ moderatorAddress, apiBase = "/api/moderation/lo
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Shield className="h-6 w-6 text-emerald-400" />
         <h2 className="text-xl font-bold text-white">Moderation Audit Log</h2>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void handleExport()}
+          disabled={isExporting}
+          className="ml-auto inline-flex min-h-9 items-center gap-2 rounded-md border border-white/15 px-3 text-sm text-slate-200 transition-colors hover:bg-white/10"
+        >
+          <Download className="h-4 w-4" />
+          {isExporting ? "Preparing export..." : "Export review edits"}
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">

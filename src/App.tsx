@@ -8,6 +8,8 @@ const ChatHome = lazy(() => import("./pages/chat/page.tsx"));
 const ProfilePage = lazy(() => import("./pages/profile/page.tsx"));
 const StatusPage = lazy(() => import("./pages/status/page.tsx"));
 const ModerationPage = lazy(() => import("./pages/Moderation.tsx"));
+const ReviewPolicyPage = lazy(() => import("./pages/ReviewPolicy.tsx"));
+const AppealsPage = lazy(() => import("./pages/Appeals.tsx"));
 
 const AppLayout = () => (
   <main className="min-h-screen bg-slate-950 text-white">
@@ -33,6 +35,8 @@ function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/status" element={<StatusPage />} />
           <Route path="/moderation" element={<ModerationPage />} />
+          <Route path="/review-policy" element={<ReviewPolicyPage />} />
+          <Route path="/appeals" element={<AppealsPage />} />
           <Route path="*" element={<Home />} />
         </Route>
       </Routes>

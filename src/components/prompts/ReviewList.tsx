@@ -3,6 +3,7 @@ import { StarRating } from "./StarRating";
 import { User, ThumbsUp, MessageSquare } from "lucide-react";
 import { ReviewClient, type Review } from "../../lib/reviews/reviewClient";
 import { Button } from "../ui/button";
+import { ReviewModerationBanner } from "./ReviewModerationBanner";
 
 const formatDistanceToNow = (date: Date, options?: { addSuffix?: boolean }) => {
   const now = Date.now();
@@ -134,7 +135,14 @@ export const ReviewList = ({
           {voteError}
         </div>
       )}
-      {reviews.map((review) => (
+      {reviews.map((review) => review.moderationDecision?.status === "removed" ? (
+        <div
+          key={review.id}
+          className="rounded-xl border border-amber-300/20 bg-amber-300/[0.03] p-4"
+        >
+          <ReviewModerationBanner decision={review.moderationDecision} reviewId={review.id} />
+        </div>
+      ) : (
         <div
           key={review.id}
           className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors"
@@ -164,6 +172,10 @@ export const ReviewList = ({
             </div>
             <StarRating rating={review.rating} readonly size="sm" />
           </div>
+
+          {review.moderationDecision && (
+            <ReviewModerationBanner decision={review.moderationDecision} reviewId={review.id} />
+          )}
 
           <p className="text-sm text-slate-300 leading-relaxed mb-3">
             {review.text}

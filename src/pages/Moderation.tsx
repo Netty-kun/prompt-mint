@@ -4,7 +4,7 @@ import { Footer } from "../components/footer";
 import { AuditLogViewer } from "../components/moderation/AuditLogViewer";
 
 export default function ModerationPage() {
-  const { address } = useWallet();
+  const { address, signMessage } = useWallet();
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.08),_transparent_35%),linear-gradient(180deg,_#020617,_#0f172a_45%,_#020617)] text-white">
@@ -19,7 +19,7 @@ export default function ModerationPage() {
         </div>
 
         <section className="rounded-2xl border border-white/10 bg-slate-950/60 p-6 sm:p-8">
-          <AuditLogViewer moderatorAddress={address ?? ""} />
+          <AuditLogViewer moderatorAddress={address ?? ""} signMessage={signMessage} />
         </section>
       </main>
 

@@ -1,5 +1,5 @@
 import { Link, NavLink } from "react-router-dom";
-import { Activity, Menu, MessageCircle, Search, ShoppingBag, Shield, User } from "lucide-react";
+import { Activity, Gavel, Menu, MessageCircle, Search, ShoppingBag, Shield, User } from "lucide-react";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 import DisplayWallet from "./DisplayWallet";
@@ -14,6 +14,7 @@ const navItems = [
   { to: "/profile", label: "Profile", icon: User },
   { to: "/status", label: "Status", icon: Activity },
   { to: "/moderation", label: "Moderation", icon: Shield },
+  { to: "/appeals", label: "Appeals", icon: Gavel },
 ];
 
 const linkClasses = ({ isActive }: { isActive: boolean }) =>

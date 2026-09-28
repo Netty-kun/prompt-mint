@@ -34,6 +34,7 @@ yarn dev
 | `CHALLENGE_TOKEN_SECRET` | long random string | platform secret | Vercel env secret |
 | `UNLOCK_*` keys | base64 NaCl keypair | production unlock keys | preview keys |
 | `MONGODB_URI` | local MongoDB | Atlas / hosted URI | preview DB URI |
+| `MODERATOR_ADDRESSES` | comma-separated moderator wallets | configured moderators | configured moderators |
 | `STELLAR_SCAFFOLD_ENV` | `development` | `staging` or `testing` | `staging` |
 
 ### Local
@@ -53,6 +54,8 @@ yarn dev
 ### Preview (Vercel)
 
 - Configure the same variables in the Vercel project **Environment Variables** panel for **Preview**
+- Configure `MONGODB_URI` and `CHALLENGE_TOKEN_SECRET` for persistent appeal submissions and signed appeal challenges.
+- Configure `MODERATOR_ADDRESSES` to enable moderator review-edit CSV exports.
 - `PUBLIC_CHAT_API_BASE` can point to a staging gateway
 - `CHALLENGE_TOKEN_SECRET` must be unique per preview environment
 - Contract ID should match the preview/testnet deployment used by that branch
@@ -78,7 +81,7 @@ yarn dev
 
 | Variable | Required | Notes |
 |----------|----------|-------|
-| `CHALLENGE_TOKEN_SECRET` | Yes | HMAC secret for challenge tokens |
+| `CHALLENGE_TOKEN_SECRET` | Yes | HMAC secret for wallet challenge tokens, including review appeals |
 | `UNLOCK_PUBLIC_KEY` | Yes | Must match `PUBLIC_UNLOCK_PUBLIC_KEY` |
 | `UNLOCK_PRIVATE_KEY` | Yes | Base64 private key for unwrap |
 
@@ -99,7 +102,8 @@ yarn dev
 | `REDIS_URL` | Rate limiting (in-memory fallback) |
 | `ADMIN_ROTATION_TOKEN` | Secret rotation admin |
 | `CHALLENGE_TOKEN_SECRET_PREVIOUS` | Rotation grace period |
-| `MONGODB_URI` | `server/` draft & buyer APIs |
+| `MONGODB_URI` | `server/` APIs, review edit audit export, and appeal submissions (required for those features) |
+| `MODERATOR_ADDRESSES` | Review edit audit export allowlist |
 
 ---
 

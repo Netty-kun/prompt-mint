@@ -15,35 +15,40 @@ export default async function handler(req: any, res: any) {
 
   try {
     const reviews = getReviews(String(promptId));
+    const visibleReviews = reviews.filter((review) => review.moderationDecision?.status !== "removed");
 
     const sortedReviews = [...reviews].sort((a, b) => b.createdAt - a.createdAt);
 
     const averageRating =
-      reviews.length > 0
-        ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      visibleReviews.length > 0
+        ? visibleReviews.reduce((sum, r) => sum + r.rating, 0) / visibleReviews.length
         : 0;
 
     res.status(200).json({
-      reviews: sortedReviews.map((r) => ({
-        id: r.id,
-        promptId: r.promptId,
-        userAddress: r.userAddress,
-        rating: r.rating,
-        text: r.text,
-        createdAt: r.createdAt,
-        verified: r.verified,
-        helpfulVotes: r.helpfulVotes,
-        sellerResponse: r.sellerResponse || null,
-      })),
+      reviews: sortedReviews.map((r) => {
+        const wasRemoved = r.moderationDecision?.status === "removed";
+        return {
+          id: r.id,
+          promptId: r.promptId,
+          userAddress: wasRemoved ? "" : r.userAddress,
+          rating: wasRemoved ? 0 : r.rating,
+          text: wasRemoved ? "" : r.text,
+          createdAt: r.createdAt,
+          verified: wasRemoved ? false : r.verified,
+          helpfulVotes: wasRemoved ? 0 : r.helpfulVotes,
+          moderationDecision: r.moderationDecision || null,
+          sellerResponse: wasRemoved ? null : r.sellerResponse || null,
+        };
+      }),
       stats: {
-        total: reviews.length,
+        total: visibleReviews.length,
         averageRating: Math.round(averageRating * 10) / 10,
         distribution: {
-          5: reviews.filter((r) => r.rating === 5).length,
-          4: reviews.filter((r) => r.rating === 4).length,
-          3: reviews.filter((r) => r.rating === 3).length,
-          2: reviews.filter((r) => r.rating === 2).length,
-          1: reviews.filter((r) => r.rating === 1).length,
+          5: visibleReviews.filter((r) => r.rating === 5).length,
+          4: visibleReviews.filter((r) => r.rating === 4).length,
+          3: visibleReviews.filter((r) => r.rating === 3).length,
+          2: visibleReviews.filter((r) => r.rating === 2).length,
+          1: visibleReviews.filter((r) => r.rating === 1).length,
         },
       },
     });

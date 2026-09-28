@@ -1,3 +1,5 @@
+import type { ReviewModerationDecision } from "../../src/lib/reviews/reviewClient";
+
 export interface StoredReview {
   id: string;
   promptId: string;
@@ -8,6 +10,7 @@ export interface StoredReview {
   verified: boolean;
   helpfulVotes: number;
   voters: string[];
+  moderationDecision?: ReviewModerationDecision;
   sellerResponse?: {
     text: string;
     createdAt: number;
@@ -40,6 +43,11 @@ function seedMockReviews() {
       verified: true,
       helpfulVotes: 1,
       voters: [],
+      moderationDecision: {
+        status: "removed",
+        reason: "Inappropriate content",
+        decidedAt: Date.now() - 86400000 * 3,
+      },
     },
     {
       id: "review_3",
@@ -78,6 +86,14 @@ export function addReview(review: StoredReview): void {
 export function findReview(promptId: string, reviewId: string): StoredReview | undefined {
   const reviews = reviewStorage.get(promptId) || [];
   return reviews.find((r) => r.id === reviewId);
+}
+
+export function findReviewById(reviewId: string): StoredReview | undefined {
+  for (const reviews of reviewStorage.values()) {
+    const review = reviews.find((item) => item.id === reviewId);
+    if (review) return review;
+  }
+  return undefined;
 }
 
 export function updateReview(promptId: string, reviewId: string, update: Partial<StoredReview>): StoredReview | undefined {

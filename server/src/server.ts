@@ -33,6 +33,8 @@ import { closeRedis } from "./lib/redisConnection";
 import { flushPendingWebhooks } from "./services/webhookDispatcher";
 import { closeCache } from "./services/cacheService";
 import { shutdownTelemetry } from "./instrumentation";
+import emailCampaignRouter from "./controllers/emailCampaignControllers.js";
+import reviewAnalyticsRouter from "./controllers/reviewAnalyticsControllers.js";
 
 const app = express();
 
@@ -100,6 +102,12 @@ app.use("/api/governance", governanceRouter); // Issue #113
 app.use("/api/moderation", moderationRouter);
 
 app.post("/api/test-prompt", TestPromptProxy);
+
+// Email campaigns (Issues #721, #722)
+app.use("/api/campaigns", emailCampaignRouter);
+
+// Review analytics (Issues #723, #724)
+app.use("/api/review-analytics", reviewAnalyticsRouter);
 
 app.get("/health", async (req, res) => {
   const [state, backupHealth] = await Promise.all([

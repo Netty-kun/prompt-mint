@@ -6,8 +6,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "start": "tsx src/index.ts",
-    "build": "tsc",
+    "start": "node init && tsx src/index.ts",
+    "build": "node init && tsc",
     "test": "vitest run"
   },
   "dependencies": {

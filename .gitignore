@@ -40,8 +40,6 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # Environment files
-.env
-.env.*
 !.env.example
 
 # Local-only files
@@ -50,7 +48,6 @@ lerna-debug.log*
 # Editor / OS artifacts
 .DS_Store
 Thumbs.db
-.vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
 .idea/
@@ -88,3 +85,7 @@ load-results/
 # Generated security / gas reports (committed baselines stay tracked)
 reports/
 contracts/prompt-hash/gas-report.json
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+config.bat

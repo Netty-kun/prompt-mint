@@ -10,12 +10,20 @@ const promptVersionSchema = new mongoose.Schema(
     versionIndex: {
       type: Number,
       required: true,
+      min: 1,
     },
-    content: {
+    contentHash: {
       type: String,
       required: true,
+      trim: true,
+      lowercase: true,
     },
-    changeNote: {
+    encryptedPayloadRef: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    changelog: {
       type: String,
       default: "",
       trim: true,
@@ -24,15 +32,17 @@ const promptVersionSchema = new mongoose.Schema(
       type: String,
       required: true,
       lowercase: true,
+      trim: true,
     },
   },
   { timestamps: true },
 );
 
 promptVersionSchema.index({ promptId: 1, versionIndex: 1 }, { unique: true });
+// Discourage duplicate listings by ensuring the same content hash cannot be stored more than once.
+promptVersionSchema.index({ contentHash: 1 }, { unique: true });
 
 const PromptVersion =
-  mongoose.models.PromptVersion ||
-  mongoose.model("PromptVersion", promptVersionSchema);
+  mongoose.models.PromptVersion || mongoose.model("PromptVersion", promptVersionSchema);
 
 export default PromptVersion;

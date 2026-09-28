@@ -26,11 +26,32 @@ const purchaseSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    termsSnapshot: {
+      termsVersion: {
+        type: Number,
+        required: true,
+      },
+      termsTitle: {
+        type: String,
+        required: true,
+      },
+      termsContent: {
+        type: String,
+        required: true,
+      },
+      acceptedAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
   },
   { timestamps: true },
 );
 
 purchaseSchema.index({ promptId: 1, buyerWallet: 1 });
+purchaseSchema.index({ buyerWallet: 1, createdAt: -1 });
+purchaseSchema.index({ promptId: 1, createdAt: -1 });
+purchaseSchema.index({ promptId: 1, buyerWallet: 1 }, { unique: true });
 
 const Purchase = mongoose.models.Purchase || mongoose.model("Purchase", purchaseSchema);
 export default Purchase;

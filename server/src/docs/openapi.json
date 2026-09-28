@@ -1,0 +1,233 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "PromptMint API Specification",
+    "description": "Production REST API for PromptMint decentralized prompt marketplace on Stellar/Soroban.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "PromptMint Engineering",
+      "url": "https://github.com/PromptMintLabs/prompt-mint"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "StellarChallengeAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Challenge-Token",
+        "description": "Cryptographically signed challenge token for authenticated unlock operations."
+      }
+    },
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "ok" },
+          "indexer": {
+            "type": "object",
+            "properties": {
+              "lastProcessedLedger": { "type": "number", "example": 104825 },
+              "timestamp": { "type": "string", "format": "date-time" }
+            }
+          },
+          "backup": {
+            "type": "object",
+            "properties": {
+              "status": { "type": "string", "example": "healthy" }
+            }
+          }
+        }
+      },
+      "Prompt": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "42" },
+          "creator": { "type": "string", "example": "GCREATORACCOUNT1234567890ABCDEFGH1234567890ABCDEFGH1234567890" },
+          "title": { "type": "string", "example": "Expert Rust Code Generator" },
+          "category": { "type": "string", "example": "Development" },
+          "price": { "type": "string", "example": "100000000" },
+          "encryptedPrompt": { "type": "string" },
+          "encryptionIv": { "type": "string" },
+          "wrappedKey": { "type": "string" },
+          "contentHash": { "type": "string" }
+        }
+      },
+      "UnlockRequest": {
+        "type": "object",
+        "required": ["token", "promptId", "address", "signedMessage"],
+        "properties": {
+          "token": { "type": "string", "example": "challenge-token-string" },
+          "promptId": { "type": "string", "example": "42" },
+          "address": { "type": "string", "example": "GBUYERACCOUNT1234567890ABCDEFGH1234567890ABCDEFGH1234567890" },
+          "signedMessage": { "type": "string", "example": "base64-signed-challenge" }
+        }
+      },
+      "UnlockResponse": {
+        "type": "object",
+        "properties": {
+          "promptId": { "type": "string", "example": "42" },
+          "title": { "type": "string", "example": "Expert Rust Code Generator" },
+          "contentHash": { "type": "string", "example": "a".repeat(64) },
+          "plaintext": { "type": "string", "example": "Unlocked prompt instructions..." }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string", "example": "INVALID_SIGNATURE" },
+          "message": { "type": "string", "example": "Invalid wallet signature." }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check & Indexer state",
+        "description": "Returns system operational status, last indexed Soroban ledger, and backup health.",
+        "responses": {
+          "200": {
+            "description": "System health payload",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HealthResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/prompts": {
+      "get": {
+        "summary": "List prompt marketplace items",
+        "responses": {
+          "200": {
+            "description": "List of prompts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Prompt" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create new prompt listing",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Prompt" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Prompt created successfully" }
+        }
+      }
+    },
+    "/api/prompts/unlock": {
+      "post": {
+        "summary": "Unlock purchased prompt content",
+        "description": "Authenticates wallet signature and challenge token to decrypt and deliver full prompt instructions.",
+        "security": [{ "StellarChallengeAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UnlockRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Prompt content successfully decrypted and returned",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UnlockResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid wallet signature or challenge token expired",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            "description": "Prompt access not purchased on-chain",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/prompts/{id}": {
+      "get": {
+        "summary": "Get prompt detail by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Prompt details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Prompt" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user": {
+      "get": {
+        "summary": "Get users list",
+        "responses": {
+          "200": { "description": "Users payload" }
+        }
+      },
+      "post": {
+        "summary": "Create user profile",
+        "responses": {
+          "201": { "description": "User profile created" }
+        }
+      }
+    },
+    "/api/user/preferences": {
+      "get": {
+        "summary": "Get user preferences",
+        "responses": { "200": { "description": "Preferences payload" } }
+      },
+      "put": {
+        "summary": "Update user preferences",
+        "responses": { "200": { "description": "Updated successfully" } }
+      }
+    },
+    "/api/user/delete": {
+      "post": {
+        "summary": "Request account deletion",
+        "responses": { "200": { "description": "Account deletion scheduled" } }
+      }
+    }
+  }
+}

@@ -94,6 +94,7 @@ describe("Review edit audit", () => {
     await handler(
       {
         method: "POST",
+        headers: {},
         body: {
           promptId: "1",
           reviewId: "review_1",

@@ -1,5 +1,4 @@
 import {
-  formatPriceLabel,
   formatCurrency,
   formatXLM,
   formatUSD,
@@ -10,27 +9,31 @@ import {
 } from "../formatters";
 
 /**
- * Converts stroops (smallest unit) to XLM string
- * 1 XLM = 10,000,000 stroops
+ * Converts stroops (smallest unit) to an XLM string using Intl.NumberFormat.
+ * 1 XLM = 10,000,000 stroops.
+ *
+ * @param stroops  Amount in stroops (bigint)
+ * @param locale   BCP 47 locale tag (e.g. "en-US", "de-DE"). Defaults to the
+ *                 runtime locale so the decimal separator matches the user's OS.
  */
-export function stroopsToXlmString(stroops: bigint): string {
+export function stroopsToXlmString(stroops: bigint, locale?: string): string {
   const xlm = Number(stroops) / 10_000_000;
-  return xlm.toLocaleString("en-US", { maximumFractionDigits: 7 });
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 7 }).format(
+    xlm,
+  );
 }
 
-export function formatPriceLabel(value: bigint | number): string {
-  const xlm = typeof value === "bigint"
-    ? stroopsToXlmString(value)
-    : value.toLocaleString("en-US", { maximumFractionDigits: 7 });
+export function formatPriceLabel(
+  value: bigint | number,
+  locale?: string,
+): string {
+  const xlm =
+    typeof value === "bigint"
+      ? stroopsToXlmString(value, locale)
+      : new Intl.NumberFormat(locale, { maximumFractionDigits: 7 }).format(
+          value,
+        );
   return `${xlm} XLM`;
-  const negative = stroops < 0n;
-  const absolute = negative ? -stroops : stroops;
-  const whole = absolute / 10_000_000n;
-  const fraction = (absolute % 10_000_000n)
-    .toString()
-    .padStart(7, "0")
-    .replace(/0+$/, "");
-  return `${negative ? "-" : ""}${whole}${fraction ? `.${fraction}` : ""}`;
 }
 
 /**
@@ -38,21 +41,16 @@ export function formatPriceLabel(value: bigint | number): string {
  */
 export function xlmToStroops(xlm: number | string): bigint {
   return BigInt(Math.round(Number(xlm) * 10_000_000));
-  const value = String(xlm).trim();
-  const match = /^([+-]?)(\d+)(?:\.(\d{1,7}))?$/.exec(value);
-  if (!match) {
-    throw new Error("Enter a valid XLM amount with up to 7 decimal places.");
-  }
-
-  const [, sign, whole, fraction = ""] = match;
-  const stroops = BigInt(whole) * 10_000_000n + BigInt(fraction.padEnd(7, "0"));
-  return sign === "-" ? -stroops : stroops;
 }
 
 /**
  * Formats an address for display (truncated)
  */
-export function formatAddress(address: string, prefixLength = 8, suffixLength = 4): string {
+export function formatAddress(
+  address: string,
+  prefixLength = 8,
+  suffixLength = 4,
+): string {
   if (address.length <= prefixLength + suffixLength) {
     return address;
   }
@@ -60,7 +58,6 @@ export function formatAddress(address: string, prefixLength = 8, suffixLength = 
 }
 
 export {
-  formatPriceLabel,
   formatCurrency,
   formatXLM,
   formatUSD,

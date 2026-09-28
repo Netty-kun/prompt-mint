@@ -1,5 +1,9 @@
 import { hasAccess, type PromptHashConfig } from "../../src/lib/stellar/promptHashClient";
+import { withBodySizeLimit } from "../../src/lib/api/bodySizeLimit";
 import { getReviews } from "./data";
+import { negotiateVersion } from "../../src/lib/api/versionGuard";
+import { withVersion } from "../../src/lib/api/payloadVersion";
+import { apiError, ErrorCode } from "../../src/lib/api/errorCodes";
 
 function getServerConfig(): PromptHashConfig {
   const rpcUrl = process.env.PUBLIC_STELLAR_RPC_URL ?? "https://soroban-testnet.stellar.org";
@@ -22,17 +26,20 @@ function getServerConfig(): PromptHashConfig {
   };
 }
 
-export default async function handler(req: any, res: any) {
+async function handler(req: any, res: any) {
   if (req.method !== "GET" && req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
   }
 
+  const version = negotiateVersion(req, res);
+  if (!version) return;
+
   const promptId = (req.query?.promptId || req.body?.promptId) as string;
   const userAddress = (req.query?.userAddress || req.body?.userAddress) as string;
 
   if (!promptId || !userAddress) {
-    res.status(400).json({ error: "Missing required promptId or userAddress" });
+    res.status(400).json(apiError(ErrorCode.MISSING_FIELDS, "Missing required promptId or userAddress", undefined, version));
     return;
   }
 
@@ -47,12 +54,17 @@ export default async function handler(req: any, res: any) {
     }
 
     if (!verified) {
-      res.status(200).json({
-        eligible: false,
-        verified: false,
-        alreadyReviewed: false,
-        reason: "Only verified purchasers with on-chain access can submit reviews.",
-      });
+      res.status(200).json(
+        withVersion(
+          {
+            eligible: false,
+            verified: false,
+            alreadyReviewed: false,
+            reason: "Only verified purchasers with on-chain access can submit reviews.",
+          },
+          version,
+        ),
+      );
       return;
     }
 
@@ -62,24 +74,36 @@ export default async function handler(req: any, res: any) {
     );
 
     if (alreadyReviewed) {
-      res.status(200).json({
-        eligible: false,
-        verified: true,
-        alreadyReviewed: true,
-        reason: "You have already submitted a review for this prompt.",
-      });
+      res.status(200).json(
+        withVersion(
+          {
+            eligible: false,
+            verified: true,
+            alreadyReviewed: true,
+            reason: "You have already submitted a review for this prompt.",
+          },
+          version,
+        ),
+      );
       return;
     }
 
-    res.status(200).json({
-      eligible: true,
-      verified: true,
-      alreadyReviewed: false,
-      reason: "Verified purchaser eligible to review.",
-    });
+    res.status(200).json(
+      withVersion(
+        {
+          eligible: true,
+          verified: true,
+          alreadyReviewed: false,
+          reason: "Verified purchaser eligible to review.",
+        },
+        version,
+      ),
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to check review eligibility";
     console.error("Eligibility check error:", message);
-    res.status(500).json({ error: message });
+    res.status(500).json(apiError(ErrorCode.TEMPORARY_FAILURE, message, undefined, version));
   }
 }
+
+export default withBodySizeLimit(handler);

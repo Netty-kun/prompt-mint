@@ -1,0 +1,61 @@
+# Repo-local Semgrep rules for PromptHash Stellar.
+# Combined in CI with p/owasp-top-ten, p/javascript, p/typescript, p/nodejs,
+# and p/rust (see .github/workflows/security-pentest.yml).
+rules:
+  - id: promptmint.no-eval
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Dynamic eval() execution is a code-injection risk. Use explicit parsers or allow-lists instead.
+    pattern: eval(...)
+
+  - id: promptmint.no-child-process-shell
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: Shelling out with user-controlled input can lead to command injection. Avoid exec/spawn with a shell.
+    patterns:
+      - pattern-either:
+          - pattern: exec($CMD, ...)
+          - pattern: execSync($CMD, ...)
+          - pattern: spawn($CMD, ...)
+          - pattern: spawnSync($CMD, ...)
+      - pattern-not: exec("...", ...)
+      - pattern-not: execSync("...", ...)
+      - pattern-not: spawn("...", ...)
+      - pattern-not: spawnSync("...", ...)
+    paths:
+      include:
+        - server/src/**/*.ts
+        - server/src/**/*.js
+        - api/**/*.ts
+        - api/**/*.js
+
+  - id: promptmint.no-hardcoded-secret-assignment
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Possible hardcoded credential. Load secrets from the environment, never from source.
+    pattern-either:
+      - pattern: $X = "sk_live_..."
+      - pattern: $X = "ghp_..."
+    paths:
+      exclude:
+        - "**/*.test.ts"
+        - "**/*.test.js"
+        - "**/test/**"
+        - "**/tests/**"
+        - "**/*.example.*"
+
+  - id: promptmint.rust-no-unwrap-in-contract
+    languages: [rust]
+    severity: WARNING
+    message: unwrap()/expect() in contract code can trap the transaction. Prefer Result and typed Error variants.
+    pattern-either:
+      - pattern: $X.unwrap()
+      - pattern: $X.expect($MSG)
+    paths:
+      include:
+        - contracts/**/*.rs
+      exclude:
+        - contracts/**/test.rs
+        - contracts/**/fuzz.rs
+        - contracts/**/gas_bench.rs
+        - contracts/**/mock_asset.rs

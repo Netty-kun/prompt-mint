@@ -1,0 +1,78 @@
+name: Soroban Schema Validation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/soroban-schema-validation.yml"
+      - "contracts/**"
+      - "src/types/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/soroban-schema-validation.yml"
+      - "contracts/**"
+      - "src/types/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+
+permissions:
+  contents: read
+
+jobs:
+  schema-validation:
+    name: Validate Contract Schema and TypeScript Types
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.89.0
+          targets: wasm32v1-none
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "yarn"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Generate contract schema
+        run: cargo build --manifest-path contracts/prompt-hash/Cargo.toml --target wasm32v1-none --release 2>&1 | tee /tmp/build.log
+
+      - name: Extract and validate schema
+        run: |
+          if [ -f contracts/prompt-hash/schema.json ]; then
+            node scripts/validate-schema.mjs
+          else
+            echo "Warning: schema.json not found. Ensure contract generates schema on build."
+          fi
+
+      - name: Typecheck schema against TypeScript definitions
+        run: yarn typecheck
+
+      - name: Validate TypeScript types consistency
+        run: |
+          if [ -f src/types/contract.ts ]; then
+            node scripts/validate-types-consistency.mjs
+          fi
+
+      - name: Report schema changes
+        if: failure()
+        run: |
+          echo "::error::Contract schema validation failed. Ensure schema.json is generated and matches TypeScript definitions."
+          exit 1

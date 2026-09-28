@@ -8,7 +8,9 @@ import {
 import {
   GenerateExportChallenge,
   RequestExport,
-  DownloadExport
+  DownloadExport,
+  GenerateDeletionChallenge,
+  RequestAccountDeletion,
 } from "../controllers/exportController";
 
 export const userRouter = express.Router();
@@ -21,3 +23,7 @@ userRouter.route("/preferences").get(GetUserPreferences).put(UpdateUserPreferenc
 userRouter.route("/export/challenge").post(GenerateExportChallenge);
 userRouter.route("/export").post(RequestExport);
 userRouter.route("/export/download/:exportId").get(DownloadExport);
+
+// #91 - data retention and deletion policy: signature-gated account deletion.
+userRouter.route("/delete/challenge").post(GenerateDeletionChallenge);
+userRouter.route("/delete").post(RequestAccountDeletion);

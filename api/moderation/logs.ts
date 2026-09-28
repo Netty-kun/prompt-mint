@@ -3,6 +3,10 @@ const MODERATOR_ADDRESSES = (process.env.MODERATOR_ADDRESSES ?? "")
   .map((a) => a.trim().toLowerCase())
   .filter(Boolean);
 
+import { negotiateVersion } from "../../src/lib/api/versionGuard";
+import { withVersion } from "../../src/lib/api/payloadVersion";
+import { apiError, ErrorCode } from "../../src/lib/api/errorCodes";
+
 export interface ModerationLogEntry {
   id: string;
   action: string;
@@ -46,6 +50,8 @@ const mockLogs: ModerationLogEntry[] = [
     createdAt: Date.now() - 86400000 * 1,
   },
 ];
+import { getModerationLogs, verifyModeratorAuth } from "./data";
+export type { ModerationLogEntry } from "./data";
 
 export default async function handler(req: any, res: any) {
   if (req.method !== "GET") {
@@ -53,10 +59,17 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
+  const version = negotiateVersion(req, res);
+  if (!version) return;
+
   const moderatorAddress = (req.query.moderatorAddress as string) ?? "";
+  const moderatorTimestamp = req.query.moderatorTimestamp
+    ? parseInt(req.query.moderatorTimestamp as string, 10)
+    : undefined;
+  const moderatorSignature = (req.query.moderatorSignature as string) ?? undefined;
 
   if (!moderatorAddress) {
-    res.status(401).json({ error: "Moderator address is required" });
+    res.status(401).json({ apiVersion: version, error: "Moderator address is required" });
     return;
   }
 
@@ -65,8 +78,19 @@ export default async function handler(req: any, res: any) {
     !MODERATOR_ADDRESSES.includes(moderatorAddress.toLowerCase())
   ) {
     res.status(403).json({
+      apiVersion: version,
       error: "Unauthorized: Only authorized moderators can view audit logs",
     });
+    return;
+  }
+  const auth = verifyModeratorAuth({
+    address: moderatorAddress,
+    timestamp: moderatorTimestamp,
+    signature: moderatorSignature,
+    purpose: "moderation-logs",
+  });
+  if (!auth.ok) {
+    res.status(auth.status).json({ error: auth.error });
     return;
   }
 
@@ -77,7 +101,7 @@ export default async function handler(req: any, res: any) {
   const since = req.query.since ? parseInt(req.query.since as string) : 0;
 
   try {
-    let filtered = [...mockLogs];
+    let filtered = [...getModerationLogs()];
 
     if (action) {
       filtered = filtered.filter((l) => l.action === action);
@@ -96,19 +120,24 @@ export default async function handler(req: any, res: any) {
     const start = (page - 1) * limit;
     const entries = filtered.slice(start, start + limit);
 
-    res.status(200).json({
-      entries,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages,
-        hasMore: page < totalPages,
-      },
-    });
+    res.status(200).json(
+      withVersion(
+        {
+          entries,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages,
+            hasMore: page < totalPages,
+          },
+        },
+        version,
+      ),
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch audit logs";
     console.error("Moderation logs error:", message);
-    res.status(500).json({ error: message });
+    res.status(500).json(apiError(ErrorCode.TEMPORARY_FAILURE, message, undefined, version));
   }
 }

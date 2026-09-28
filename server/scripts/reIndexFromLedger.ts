@@ -22,6 +22,7 @@
 import mongoose from "mongoose";
 import { SorobanRpc, scValToNative } from "@stellar/stellar-sdk";
 import Prompt from "../src/models/Prompt";
+import Purchase from "../src/models/Purchase";
 import User from "../src/models/User";
 import { IndexerState } from "../src/models/IndexerState";
 
@@ -106,13 +107,29 @@ async function processEvent(
     }
 
     case "PromptPurchased": {
-      const { prompt_id } = data;
+      const { prompt_id, buyer } = data;
+      const txHash = (event as any).txHash;
       summary.purchased++;
       if (dryRun) break;
       await Prompt.findOneAndUpdate(
         { onChainId: prompt_id.toString() },
         { $inc: { salesCount: 1 } },
       );
+      if (buyer && txHash) {
+        await Purchase.updateOne(
+          {
+            promptId: prompt_id.toString(),
+            buyerWallet: buyer.toLowerCase(),
+          },
+          {
+            $setOnInsert: {
+              versionIndex: 1,
+              txHash,
+            },
+          },
+          { upsert: true },
+        );
+      }
       break;
     }
 

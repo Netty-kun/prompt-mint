@@ -2,8 +2,24 @@
 
 import { motion } from "framer-motion";
 import { Bot } from "lucide-react";
+import { useReducedMotion } from "@/components/ReducedMotionProvider";
 
 export function RoboAnimation() {
+  const { prefersReducedMotion } = useReducedMotion();
+
+  if (prefersReducedMotion) {
+    return (
+      <div className="relative w-full h-full">
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="relative">
+            <div className="absolute -inset-4 bg-purple-500/20 rounded-full blur-xl" />
+            <Bot className="w-32 h-32 text-purple-500" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative w-full h-full">
       <motion.div

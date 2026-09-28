@@ -7,10 +7,11 @@ groups:
         labels:
           severity: critical
           service: unlock_api
+          pagerduty: "true"
         annotations:
           summary: "High API Error Rate"
           description: "The API is experiencing a sustained rate of 5xx errors (> 5 req/sec) over the last 5 minutes."
-          runbook_url: "https://github.com/PromptMintLabs/prompt-mint/blob/main/docs/operations/runbook.md#monitoring--metrics"
+          runbook_url: "https://github.com/PromptMintLabs/prompt-mint/blob/main/docs/operations/monitoring.md"
 
       - alert: HighLatency
         expr: histogram_quantile(0.99, sum(rate(api_request_duration_ms_bucket[5m])) by (le, path)) > 2000
@@ -21,7 +22,7 @@ groups:
         annotations:
           summary: "High API Latency"
           description: "The P99 API latency for path {{ $labels.path }} is consistently over 2 seconds. This could indicate RPC or Indexer lag."
-          runbook_url: "https://github.com/PromptMintLabs/prompt-mint/blob/main/docs/operations/runbook.md#monitoring--metrics"
+          runbook_url: "https://github.com/PromptMintLabs/prompt-mint/blob/main/docs/operations/monitoring.md"
 
       - alert: ExcessiveUnlockFailures
         expr: sum(rate(unlock_failure_total[5m])) > 10
@@ -33,3 +34,49 @@ groups:
           summary: "High Unlock Failure Rate"
           description: "Elevated volume of unlock failures. This represents user errors (invalid signatures, no access) but may indicate a UX issue or systemic RPC sync issue if a large number of purchases are not being recognized."
           runbook_url: "https://github.com/PromptMintLabs/prompt-mint/blob/main/docs/operations/runbook.md#debugging-common-issues"
+
+      - alert: RpcCallLatencyP99
+        expr: histogram_quantile(0.99, sum(rate(rpc_call_duration_ms_bucket[5m])) by (le, method)) > 2000
+        for: 5m
+        labels:
+          severity: critical
+          service: stellar_rpc
+          pagerduty: "true"
+        annotations:
+          summary: "RPC call latency P99"
+          description: "Soroban RPC P99 latency for method {{ $labels.method }} exceeded 2 seconds for 5 minutes."
+          runbook_url: "https://github.com/PromptMintLabs/prompt-mint/blob/main/docs/operations/monitoring.md"
+
+      - alert: ApiEndpointUnhealthy
+        expr: min(api_endpoint_health) by (path) < 1
+        for: 2m
+        labels:
+          severity: critical
+          service: unlock_api
+          pagerduty: "true"
+        annotations:
+          summary: "API endpoint health"
+          description: "Endpoint {{ $labels.path }} is reporting unhealthy (gauge 0)."
+          runbook_url: "https://github.com/PromptMintLabs/prompt-mint/blob/main/docs/operations/monitoring.md"
+
+      - alert: TransactionVolumeDrop
+        expr: sum(increase(transaction_volume_total[15m])) < 1
+        for: 15m
+        labels:
+          severity: warning
+          service: marketplace
+        annotations:
+          summary: "Transaction volume drop"
+          description: "No submitted Stellar transactions in the last 15 minutes during expected traffic."
+          runbook_url: "https://github.com/PromptMintLabs/prompt-mint/blob/main/docs/operations/monitoring.md"
+
+      - alert: ActiveUsersDrop
+        expr: sum(increase(active_users_total[15m])) < 1
+        for: 15m
+        labels:
+          severity: warning
+          service: frontend
+        annotations:
+          summary: "Active users drop"
+          description: "Active-user heartbeats dropped to zero for 15 minutes."
+          runbook_url: "https://github.com/PromptMintLabs/prompt-mint/blob/main/docs/operations/monitoring.md"

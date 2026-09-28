@@ -35,9 +35,9 @@
     "success": "Prompt listed successfully!"
   },
   "errors": {
-    "not_found": "Prompt not found.",
-    "unauthorized": "You are not authorized.",
-    "paused": "The marketplace is currently paused.",
+    "not_found": "This prompt could not be found. It may have been removed by its creator, or the link may be incorrect — double-check the link or browse the marketplace for similar prompts.",
+    "unauthorized": "You don't have permission to do that. Make sure you're connected with the wallet that owns this prompt or purchase, then try again.",
+    "paused": "The marketplace is temporarily paused for maintenance. Your funds and listings are safe — please try again in a few minutes.",
     "validation": {
       "required": "This field is required.",
       "min_length": "Must be at least {{min}} characters.",
@@ -48,39 +48,127 @@
       "invalid_address": "Invalid wallet address.",
       "review_text_short": "Review text must be at least 10 characters.",
       "review_text_long": "Review text must not exceed 500 characters.",
-      "response_text_long": "Response text must not exceed 1000 characters."
+      "response_text_long": "Response text must not exceed 1000 characters.",
+      "title_required": "Title is required.",
+      "title_min_length": "Title must be at least 3 characters.",
+      "price_must_be_positive": "Price must be greater than 0.",
+      "price_required": "Price is required.",
+      "image_url_invalid": "Image URL must start with http:// or https://.",
+      "image_url_required": "Image URL is required.",
+      "category_required": "Category is required.",
+      "preview_required": "Preview text is required.",
+      "preview_min_length": "Preview text must be at least 10 characters.",
+      "prompt_required": "Full prompt content is required.",
+      "prompt_min_length": "Full prompt must be at least 10 characters."
     },
     "transaction": {
       "user_rejected": "Transaction was rejected by the user.",
-      "insufficient_funds": "Insufficient funds to complete this transaction.",
-      "insufficient_gas": "Insufficient gas to complete this transaction.",
-      "invalid_signature": "Transaction signature is invalid.",
-      "network_error": "Network error. Please try again.",
-      "expired": "Transaction request has expired.",
-      "unknown": "An unexpected error occurred. Please try again.",
+      "insufficient_funds": "Insufficient funds to complete this transaction. Add more funds to your wallet and try again.",
+      "insufficient_gas": "Insufficient gas to complete this transaction. Top up your wallet's XLM balance to cover network fees, then try again.",
+      "invalid_signature": "Transaction signature is invalid. Reconnect your wallet and try signing the transaction again.",
+      "network_error": "Network error. Please check your internet connection and try again.",
+      "expired": "Transaction request has expired. Please start the transaction again.",
+      "unknown": "An unexpected error occurred. Please try again. If this keeps happening, please contact support with the time this occurred.",
       "pending": "Processing transaction on the Stellar network..."
     },
     "wallet": {
       "connect_required": "Please connect your wallet first.",
-      "network_mismatch": "Wrong network configured in your wallet.",
-      "disconnect_failed": "Failed to disconnect wallet."
+      "network_mismatch": "Your wallet is connected to the wrong network. Switch your wallet to the correct network and try again.",
+      "disconnect_failed": "Failed to disconnect wallet. Please try again, or close and reopen your wallet extension."
     },
     "review": {
       "self_vote": "You cannot vote on your own review.",
       "duplicate_vote": "You have already voted on this review.",
-      "not_eligible": "Only verified purchasers can submit reviews.",
-      "already_reviewed": "You have already submitted a review for this prompt.",
+      "not_eligible": "Only verified purchasers can submit reviews. Purchase this prompt to leave a review.",
+      "already_reviewed": "You have already submitted a review for this prompt. You can edit your existing review instead.",
       "seller_only": "Only the verified seller can respond to reviews.",
       "vote_success": "Vote recorded successfully.",
       "vote_removed": "Vote removed successfully.",
       "response_submitted": "Seller response submitted successfully."
     },
     "moderation": {
-      "unauthorized": "Only authorized moderators can view audit logs.",
-      "address_required": "Moderator address is required."
+      "unauthorized": "Only authorized moderators can view audit logs. If you believe this is a mistake, contact support to request moderator access.",
+      "address_required": "Enter a moderator wallet address before continuing."
     }
   },
   "language": {
     "select": "Language"
+  },
+  "webhook_replay": {
+    "title": "Webhook Event Replay",
+    "subtitle": "Inspect dead-lettered contract events and redeliver them to your endpoint.",
+    "connect_wallet": "Connect your Stellar wallet to inspect the replay queue for your webhook.",
+    "register_first": "No webhook is registered for this wallet yet. Register one from your profile to start receiving events.",
+    "loading": "Loading replay queue...",
+    "empty": "Nothing to replay. Every webhook delivery has landed.",
+    "refresh": "Refresh",
+    "include_resolved": "Include already-resolved events",
+    "acceptance_window": "A stored envelope is replayed with its original timestamp, so receivers that follow the signature guide reject anything older than {{seconds}} seconds. Replay with a fresh timestamp when that warning appears.",
+    "admin_token_label": "Admin API token",
+    "admin_token_placeholder": "ADMIN_API_TOKEN",
+    "admin_token_help": "Replaying triggers an outbound delivery, so the server gates it behind the admin token. The token is kept in memory for this session and is never stored.",
+    "admin_token_missing": "Enter an admin token before replaying.",
+    "summary": {
+      "pending": "Pending",
+      "replayable": "Replayable",
+      "stale": "Past window",
+      "resolved": "Resolved"
+    },
+    "row": {
+      "dead_lettered": "Dead-lettered {{date}}",
+      "attempts": "{{count}} delivery attempts",
+      "fingerprint": "Payload fingerprint",
+      "delivery_id": "Delivery ID",
+      "age": "Age",
+      "replay_count": "Replays",
+      "last_replayed": "last {{date}}",
+      "last_error": "Last error",
+      "status_code": "HTTP {{code}}",
+      "payload": "Stored payload",
+      "warnings_label": "Before you replay",
+      "replay_verbatim": "Replay verbatim",
+      "replay_restamp": "Replay with fresh timestamp"
+    },
+    "badge": {
+      "resolved": "Resolved",
+      "stale": "Past window"
+    },
+    "warning": {
+      "stale_event": "This envelope is older than the {{seconds}}-second acceptance window. Replaying it verbatim keeps the old timestamp, so a receiver that enforces the window will reject it — use a fresh timestamp instead.",
+      "already_resolved": "This event was already delivered successfully, so replaying it is disabled.",
+      "unparseable_timestamp": "The stored timestamp is unreadable, so its age cannot be checked.",
+      "subscription_missing": "The subscription this event belongs to no longer exists. Re-register your webhook to receive it.",
+      "subscription_inactive": "This subscription is paused, so replay will fail until it is reactivated."
+    },
+    "result": {
+      "success": "Replay delivered. The receiver accepted the event.",
+      "failed": "Replay failed: {{error}}",
+      "unknown_error": "Unexpected error."
+    },
+    "preview": {
+      "title": "Envelope preview",
+      "description": "Build the exact body and headers a receiver would see, without delivering anything anywhere.",
+      "event_label": "Event",
+      "build": "Build preview",
+      "body": "Request body",
+      "headers": "Headers",
+      "copy": "Copy body",
+      "copied": "Copied",
+      "note": "A preview always carries a fresh delivery ID and timestamp. Replaying a dead letter re-sends the stored envelope instead, which is why the queue above reports an age for each event."
+    },
+    "catalog": {
+      "title": "Event catalog",
+      "description": "Events a webhook can subscribe to. This is the same catalog the registration API enforces, so the two cannot drift apart.",
+      "dispatched": "Dispatched",
+      "undispatched": "Not dispatched yet"
+    }
+  },
+  "number_format": {
+    "xlm_unit": "XLM",
+    "stroop_unit": "stroop",
+    "stroop_unit_plural": "stroops",
+    "stroops_per_xlm": "1 XLM = 10,000,000 stroops",
+    "price_label": "{{amount}} XLM",
+    "price_label_usd": "{{amount}} USD"
   }
 }

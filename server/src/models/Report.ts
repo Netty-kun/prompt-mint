@@ -64,6 +64,12 @@ const reportSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    resolution: {
+      type: String,
+      enum: ["upheld", "dismissed", "remediated"],
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,

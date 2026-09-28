@@ -47,8 +47,13 @@ export const MODEL_CONFIG = {
   },
 };
 
+const DEFAULT_FETCH_TIMEOUT_MS = 15_000;
+
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, init);
+  const response = await fetch(input, {
+    ...init,
+    signal: init?.signal ?? AbortSignal.timeout(DEFAULT_FETCH_TIMEOUT_MS),
+  });
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || `Request failed with status ${response.status}.`);
@@ -74,7 +79,9 @@ export async function getModels() {
 
 export async function checkHealth() {
   try {
-    const response = await fetch(`${chatApiBase}/api/health`);
+    const response = await fetch(`${chatApiBase}/api/health`, {
+      signal: AbortSignal.timeout(DEFAULT_FETCH_TIMEOUT_MS),
+    });
     return response.ok;
   } catch {
     return false;

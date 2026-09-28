@@ -1,0 +1,93 @@
+name: License Compliance
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "package.json"
+      - "yarn.lock"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "license-policy.json"
+      - "deny.toml"
+      - ".github/workflows/license-compliance.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "package.json"
+      - "yarn.lock"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "license-policy.json"
+      - "deny.toml"
+      - ".github/workflows/license-compliance.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  npm-license-check:
+    name: "npm: license audit"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Install Yarn
+        run: npm install -g yarn@4.9.2
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Run license audit
+        run: node scripts/license-audit.mjs
+
+  cargo-license-check:
+    name: "cargo: license audit"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.89.0"
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Run cargo-deny license check
+        run: cargo deny check licenses
+
+  accessibility-audit:
+    name: "accessibility: audit"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Install Yarn
+        run: npm install -g yarn@4.9.2
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Install Playwright Browsers
+        run: yarn playwright install --with-deps chromium
+
+      - name: Run accessibility audit
+        run: node scripts/accessibility-audit.mjs

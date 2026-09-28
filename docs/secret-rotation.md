@@ -1,18 +1,23 @@
-# Challenge Token Secret Rotation
+# Automated Secrets Rotation
 
 ## Overview
 
-The unlock service uses HMAC-signed challenge tokens to authenticate wallet ownership before decrypting purchased prompt content. To maintain security, the signing secret should be rotated periodically. This document describes the automated rotation mechanism and operational procedures.
+PromptMint implements automated secrets rotation for API keys, tokens, and system secrets:
+1. **Automated 90-day rotation**: System secrets and API keys auto-rotate every 90 days.
+2. **Overlapping validity windows**: Old secrets remain valid for a grace period (default 7 days) to ensure zero downtime.
+3. **Dependent service synchronization**: In-flight token verification and dependent services seamlessly accept active secrets.
+4. **Team notifications**: Team is automatically notified via webhooks (Slack/Discord/Ops), email, and persistent audit logs.
 
 ## Architecture
 
-### Multi-Secret Support
+### Multi-Secret Support & Overlapping Validity
 
-The system supports multiple active secrets simultaneously during a configurable grace period. This prevents service disruption during rotation:
+The system supports multiple active secrets simultaneously during an overlapping validity window (grace period):
 
-1. **Current Secret**: The primary secret used to sign new challenge tokens
-2. **Previous Secret**: The old secret, valid during the grace period for existing tokens
-3. **Grace Period**: Time window (default 5 minutes) where both secrets are valid
+1. **Current Secret**: The primary secret used to sign new challenge tokens and issue API keys
+2. **Previous Secret**: The old secret, valid during the overlapping window for in-flight tokens and service migrations
+3. **Grace Period**: Time window (default 7 days / configurable) where both secrets are valid across all dependent services
+4. **Next Rotation**: Pre-scheduled 90 days from the latest rotation date
 
 ### Token Verification Flow
 
@@ -37,25 +42,27 @@ The system supports multiple active secrets simultaneously during a configurable
 - `CHALLENGE_TOKEN_SECRET`: Current active secret for signing tokens
 - `ADMIN_ROTATION_TOKEN`: Authentication token for rotation endpoint
 
-### Optional Variables (Rotation State)
+### Optional Variables (Rotation & Notifications)
 
 - `CHALLENGE_TOKEN_SECRET_PREVIOUS`: Previous secret (valid during grace period)
 - `CHALLENGE_TOKEN_ROTATION_TIMESTAMP`: Unix timestamp (ms) of last rotation
-- `CHALLENGE_TOKEN_GRACE_PERIOD_MS`: Grace period duration in milliseconds (default: 300000 = 5 minutes)
+- `CHALLENGE_TOKEN_GRACE_PERIOD_MS`: Grace period duration in milliseconds (default: 7 days = 604800000 ms)
+- `SECRETS_ROTATION_INTERVAL_MS`: Rotation interval (default: 90 days = 7776000000 ms)
+- `ROTATION_NOTIFICATION_WEBHOOK_URL` / `SLACK_WEBHOOK_URL` / `DISCORD_WEBHOOK_URL`: Team notification webhook
+- `TEAM_NOTIFICATION_EMAIL`: Ops/security notification email
 
 ## Rotation Methods
 
-### 1. Automated Rotation (Recommended)
+### 1. Automated 90-Day Rotation CLI & Cron
 
-Use the provided shell script with cron scheduling:
+Run the automated rotation CLI:
 
 ```bash
-# Set environment variables
-export ADMIN_ROTATION_TOKEN="your-secure-token"
-export UNLOCK_SERVICE_URL="https://your-domain.com"
+# Check if 90 days have elapsed and rotate if due
+npx tsx scripts/auto-rotate-secrets.ts
 
-# Run rotation with 10-minute grace period
-./scripts/rotate-secrets.sh --grace-period 600
+# Force immediate rotation
+npx tsx scripts/auto-rotate-secrets.ts --force
 ```
 
 #### Cron Setup
@@ -345,8 +352,114 @@ Content-Type: application/json
    - One-click rotation via admin dashboard
    - Immediate invalidation of all existing tokens
 
+## Encryption Content Rotation
+
+The system also supports rotation of the **encrypted payload** stored on-chain for each prompt. This allows creators to re-encrypt prompt content without exposing plaintext to the server.
+
+### Architecture
+
+Each prompt has an `encryption_version` counter (starting at 1). When a buyer purchases a prompt, the current version is recorded in their `Purchase` record. Rotation archives the current encrypted payload and creates a new version:
+
+```
+Version 1 (initial)          Version 2 (after rotation)
+┌──────────────────────┐     ┌──────────────────────┐
+│ Prompt.encrypted     │ ──► │ Prompt.encrypted     │ (new)
+│ Prompt.wrapped_key   │     │ Prompt.wrapped_key   │ (new)
+│ Prompt.content_hash  │     │ Prompt.content_hash  │ (new)
+└──────────────────────┘     └──────────────────────┘
+         │                              │
+         ▼                              ▼
+  Archived as                    (new current version)
+  PromptEncryptedPayload
+  (prompt_id, version=1)
+```
+
+### On-Chain Functions
+
+#### `rotate_encryption` (creator only)
+
+Rotates the encryption material for a prompt. Called by the creator (or operator with creator authorization):
+
+```rust
+fn rotate_encryption(
+    env: Env,
+    creator: Address,
+    prompt_id: u128,
+    encrypted_prompt: String,   // new AES-256-GCM ciphertext (base64)
+    encryption_iv: String,       // new IV (base64)
+    wrapped_key: String,         // new wrapped AES key (NaCL box seal, base64)
+    content_hash: BytesN<32>,    // SHA-256 of the plaintext
+) -> Result<u32, Error>          // returns the new version number
+```
+
+**How rotation works (no plaintext on server):**
+1. Creator decrypts the prompt locally in their browser (has the plaintext)
+2. Generates a **new AES-256-GCM key**
+3. Re-encrypts the prompt with the new key → new `encrypted_prompt` + `encryption_iv`
+4. Wraps the new AES key with the unlock service's public key → new `wrapped_key`
+5. Hashes the plaintext → new `content_hash`
+6. Submits all four values on-chain via `rotate_encryption`
+7. The contract archives the previous payload and increments the version
+
+The server never touches plaintext during rotation.
+
+#### `get_prompt_encryption_version`
+
+Retrieves a specific version's encrypted payload:
+
+```rust
+fn get_prompt_encryption_version(
+    env: Env,
+    prompt_id: u128,
+    version: u32,
+) -> Result<PromptEncryptedPayload, Error>
+```
+
+Returns `EncryptionVersionNotFound` if the requested version does not exist.
+
+### Unlock Flow After Rotation
+
+1. Server verifies the buyer's on-chain entitlement via `has_access`
+2. Fetches `get_purchase_details` to read the buyer's `encryption_version`
+3. If the buyer's version matches the prompt's current version → decrypt using prompt's live fields
+4. If the buyer's version is older → fetch the archived payload via `get_prompt_encryption_version`
+5. Decrypt using the correct version's `encrypted_prompt`, `encryption_iv`, and `wrapped_key`
+6. Verify integrity by comparing the recomputed SHA-256 hash against the stored `content_hash`
+
+### Graceful Degradation
+
+- **No purchase record (legacy buyer):** Falls back to the current prompt version
+- **Archived version missing:** Returns a 400 error; the prior version is preserved by the contract so this should not occur in normal operation
+- **Integrity mismatch:** Returns a 500 error, indicating data corruption
+
+### Contract Events
+
+An `EncryptionRotated` event is emitted on each rotation:
+```
+prompt_id: u128
+previous_version: u32
+new_version: u32
+rotated_at: u64
+```
+
+### Smart Contract Storage Keys
+
+| Key | Value | Description |
+|-----|-------|-------------|
+| `PromptEncryptedPayload(prompt_id, version)` | `PromptEncryptedPayload` | Archived encrypted payload |
+| `PromptEncryptionVersion(prompt_id)` | `u32` | Current version counter |
+
+### New Error Codes
+
+| Error | Code | Description |
+|-------|------|-------------|
+| `EncryptionVersionNotFound` | 47 | Requested version does not exist |
+| `InvalidRotation` | 48 | Rotation parameters invalid |
+| `VersionMismatch` | 49 | Version inconsistency detected |
+
 ## Related Documentation
 
 - [Security Model](./security-model.md) - Overall security architecture
+- [Unlock key recovery](./operations/unlock-key-recovery.md) - Unlock private key backup and recovery
 - [API Reference](./api-reference.md) - Challenge-response protocol
 - [Operations Runbook](./operations/runbook.md) - Operational procedures

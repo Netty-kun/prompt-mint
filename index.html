@@ -1,19 +1,45 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <title>Scaffold Stellar Starter App</title>
+    <meta name="theme-color" content="#7c3aed" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="PromptHash" />
+    <link rel="icon" type="image/x-favicon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png" />
+    <title>PromptHash - Stellar Prompt Marketplace</title>
+    <script>
+      // Immediately set theme class to avoid flash (uses localStorage or system)
+      (function() {
+        try {
+          var key = 'theme-preference'
+          var stored = localStorage.getItem(key)
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+          var isDark = stored ? stored === 'dark' : prefersDark
+          if (isDark) {
+            document.documentElement.classList.add('dark')
+            document.documentElement.style.colorScheme = 'dark'
+          } else {
+            document.documentElement.classList.remove('dark')
+            document.documentElement.style.colorScheme = 'light'
+          }
+        } catch (e) {
+          // ignore
+        }
+      })()
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Inconsolata:wght@500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght:100..900&family=Inconsolata:wght:500&display=swap"
       rel="stylesheet"
     />
   </head>
   <body>
-    <div id="root"></div>
+    <a href="#root">Skip to main content</a>
+    <div id="root" tabindex="-1" role="main"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { FileText } from "lucide-react";
+import { useReducedMotion } from "@/components/ReducedMotionProvider";
 
 export function FloatingPaper({ count = 5 }) {
+  const { prefersReducedMotion } = useReducedMotion();
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
 
   useEffect(() => {
-    // Update dimensions only on client side
     setDimensions({
       width: window.innerWidth,
       height: window.innerHeight,
@@ -24,6 +25,27 @@ export function FloatingPaper({ count = 5 }) {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  if (prefersReducedMotion) {
+    return (
+      <div className="relative w-full h-full">
+        {Array.from({ length: count }).map((_, i) => (
+          <div
+            key={i}
+            className="absolute"
+            style={{
+              left: `${(i + 1) * (100 / (count + 1))}%`,
+              top: `${30 + (i % 3) * 20}%`,
+            }}
+          >
+            <div className="relative w-16 h-20 bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 flex items-center justify-center">
+              <FileText className="w-8 h-8 text-purple-400/50" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full h-full">

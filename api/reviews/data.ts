@@ -1,5 +1,3 @@
-import type { ReviewModerationDecision } from "../../src/lib/reviews/reviewClient";
-
 export interface StoredReview {
   id: string;
   promptId: string;
@@ -10,12 +8,27 @@ export interface StoredReview {
   verified: boolean;
   helpfulVotes: number;
   voters: string[];
-  moderationDecision?: ReviewModerationDecision;
+  editedAt?: number;
+  editHistory: ReviewEditAuditEntry[];
+  moderation?: {
+    status: "approved" | "removed";
+    moderatorAddress: string;
+    reason: string;
+    updatedAt: number;
+  };
   sellerResponse?: {
     text: string;
     createdAt: number;
     editedAt?: number;
   };
+}
+
+/** Immutable snapshots retained whenever an author changes a review. */
+export interface ReviewEditAuditEntry {
+  editedAt: number;
+  editorAddress: string;
+  previousRating: number;
+  previousText: string;
 }
 
 const reviewStorage = new Map<string, StoredReview[]>();
@@ -32,6 +45,7 @@ function seedMockReviews() {
       verified: true,
       helpfulVotes: 3,
       voters: ["GBCD234ABC567EFG890HIJ123KLM456NOP789QRS012TUV345WXY678ZA"],
+      editHistory: [],
     },
     {
       id: "review_2",
@@ -43,10 +57,12 @@ function seedMockReviews() {
       verified: true,
       helpfulVotes: 1,
       voters: [],
-      moderationDecision: {
+      editHistory: [],
+      moderation: {
         status: "removed",
+        moderatorAddress: "gmoderator1",
         reason: "Inappropriate content",
-        decidedAt: Date.now() - 86400000 * 3,
+        updatedAt: Date.now() - 86400000 * 3,
       },
     },
     {
@@ -59,6 +75,7 @@ function seedMockReviews() {
       verified: true,
       helpfulVotes: 0,
       voters: [],
+      editHistory: [],
     },
   ];
 
@@ -88,14 +105,6 @@ export function findReview(promptId: string, reviewId: string): StoredReview | u
   return reviews.find((r) => r.id === reviewId);
 }
 
-export function findReviewById(reviewId: string): StoredReview | undefined {
-  for (const reviews of reviewStorage.values()) {
-    const review = reviews.find((item) => item.id === reviewId);
-    if (review) return review;
-  }
-  return undefined;
-}
-
 export function updateReview(promptId: string, reviewId: string, update: Partial<StoredReview>): StoredReview | undefined {
   const reviews = reviewStorage.get(promptId) || [];
   const index = reviews.findIndex((r) => r.id === reviewId);
@@ -115,4 +124,12 @@ export function getReviewsByUser(userAddress: string): StoredReview[] {
     }
   }
   return result;
+}
+
+export function findReviewById(reviewId: string): StoredReview | undefined {
+  for (const reviews of reviewStorage.values()) {
+    const review = reviews.find((item) => item.id === reviewId);
+    if (review) return review;
+  }
+  return undefined;
 }

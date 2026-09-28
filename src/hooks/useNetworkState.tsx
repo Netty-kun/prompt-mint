@@ -1,5 +1,4 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
-import React from "react";
 import { browserStellarConfig } from "../lib/stellar/browserConfig";
 
 export type ServiceHealthStatus = "up" | "degraded" | "down";
@@ -74,8 +73,8 @@ export function NetworkStateProvider({ children }: { children: ReactNode }) {
         browserStellarConfig.rpcUrl
           ? checkUrlHealth(browserStellarConfig.rpcUrl)
           : Promise.resolve<ServiceHealthStatus>("up"),
-        browserStellarConfig.horizonUrl
-          ? checkUrlHealth(browserStellarConfig.horizonUrl)
+        (browserStellarConfig as any).horizonUrl
+          ? checkUrlHealth((browserStellarConfig as any).horizonUrl)
           : Promise.resolve<ServiceHealthStatus>("up"),
         checkUrlHealth("/api/health"),
       ]);

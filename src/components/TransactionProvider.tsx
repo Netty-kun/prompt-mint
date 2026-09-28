@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
 import { StatusBanner } from "./StatusBanner";
+import { TransactionProgress } from "./TransactionProgress";
 import "./TransactionProvider.css";
 
 export type TransactionStatus = "idle" | "pending" | "success" | "error";
@@ -60,6 +61,7 @@ export const TransactionProvider: React.FC<{ children: ReactNode }> = ({ childre
     <TransactionContext.Provider value={{ transactions, addTransaction, updateTransaction, removeTransaction }}>
       {children}
       <div className="notification-container">
+        <TransactionProgress className="mb-2" />
         {transactions.map((tx) => (
           <div key={tx.id} className={`notification ${tx.status} slide-in`}>
             <StatusBanner

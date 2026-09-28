@@ -10,6 +10,21 @@
 
 This report documents a review of the PromptHash Stellar smart contract and the off-chain unlock service. No critical vulnerabilities were found. Two medium-severity findings and three low-severity findings are disclosed below with recommended mitigations.
 
+### Issue #251 remediation and contract re-audit (2026-08-25)
+
+The Soroban contract findings were re-audited for issue #251. The original audit reported no critical or high-severity findings. All three contract findings are resolved:
+
+| Finding | Remediation | Re-audit result |
+|---|---|---|
+| AUD-01 | `Prompt.active` is stored on-chain and both `buy_prompt` (through `execute_buy`) and `lease_prompt` reject inactive prompts before payment. | Resolved; covered by `test_inactive_prompt_cannot_be_bought`. |
+| AUD-03 | Token calculations, counters, subscription expiry, and tip calculation use checked arithmetic. Release builds also retain `overflow-checks = true`. | Resolved; static review found no unchecked runtime amount arithmetic. |
+| AUD-05 | `payment_amount_stroops` is the buyer-authorized price ceiling: the transaction fails with `InvalidPaymentAmount` if the current effective price exceeds it. Any intentional amount above the effective price remains an explicit tip. | Resolved; covered by the underpayment/slippage and exact-payment tests. |
+
+Verification performed:
+
+- `cargo +stable fmt --all -- --check` — passed after formatting the remediation.
+- `cargo +stable test -p prompt-hash` — compilation was attempted but the local Windows environment resolved GNU `link.exe` instead of the MSVC linker. No test executable was produced; CI or a Visual Studio Build Tools shell must run the suite before deployment.
+
 ---
 
 ## 1. Soroban Contract Analysis
@@ -112,11 +127,11 @@ Run `npm audit` and `cargo audit` in CI to catch future advisories automatically
 
 | ID | Severity | Component | Title | Status |
 |---|---|---|---|---|
-| AUD-01 | Medium | Contract | No on-chain prompt liveness check at purchase | Open |
+| AUD-01 | Medium | Contract | No on-chain prompt liveness check at purchase | Resolved (#251) |
 | AUD-02 | Medium | Unlock Service | Weak challenge nonce generation | Open |
-| AUD-03 | Low | Contract | Unchecked arithmetic in release builds | Open |
+| AUD-03 | Low | Contract | Unchecked arithmetic in release builds | Resolved (#251) |
 | AUD-04 | Low | Unlock Service | Client-supplied wallet in signature check | Open |
-| AUD-05 | Low | Contract | No `max_price` slippage guard | Open |
+| AUD-05 | Low | Contract | No `max_price` slippage guard | Resolved (#251) |
 | AUD-06 | Info | Unlock Service | Key material stored server-side | Accepted risk |
 | AUD-07 | Info | Unlock Service | Unlock endpoint not rate-limited | Open |
 

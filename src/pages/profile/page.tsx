@@ -9,6 +9,7 @@ import {
   Boxes,
   CheckCircle2,
   CircleOff,
+  Clock,
   Copy,
   Eye,
   KeyRound,
@@ -20,6 +21,7 @@ import {
   PencilLine,
   PlugZap,
   RadioTower,
+  Receipt,
   ShieldCheck,
   ShoppingBag,
   Wallet,
@@ -28,16 +30,25 @@ import {
 import { Footer } from "@/components/footer";
 import { Navigation } from "@/components/navigation";
 import { TipButton } from "@/components/TipButton";
+import { ShareLinkButton } from "@/components/ShareLinkButton";
 import { UnlockExplainer, type UnlockState } from "@/components/UnlockExplainer";
 import { WebhookSettings } from "@/components/WebhookSettings";
 import { NotificationPreferences } from "@/components/NotificationPreferences";
 import { PostVersionUpdate } from "@/components/PostVersionUpdate";
+import { CreatorReputationPanel } from "@/components/CreatorReputation";
+import { ReputationSummary } from "@/components/ReputationSummary";
+import { CreatorVerificationCard } from "@/components/CreatorVerificationCard";
+import { VerifiedCreatorBadge } from "@/components/VerifiedCreatorBadge";
+import { RecentlyViewed } from "@/components/RecentlyViewed";
+import { SkeletonCard } from "@/components/Skeleton";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useWallet } from "@/hooks/useWallet";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
+import { useCreatorVerification } from "@/hooks/useCreatorVerification";
 import { invalidateAllPromptQueries } from "@/hooks/useContractSync";
 import { browserStellarConfig } from "@/lib/stellar/browserConfig";
 import {
@@ -62,6 +73,12 @@ import {
 import { shortenAddress } from "@/lib/utils";
 import { stellarNetwork } from "@/lib/env";
 import { connectWallet } from "@/util/wallet";
+import {
+  buildCreatorShareUrl,
+  buildPromptSharePath,
+  parseCreatorAddressParam,
+} from "@/lib/marketplace/shareUrls";
+import { TransactionHistoryPanel } from "@/components/dashboard/TransactionHistoryPanel";
 
 const promptImageFallback = "/images/codeguru.png";
 
@@ -99,58 +116,15 @@ function AlertBanner({
 
 function LoadingState({ label }: { label: string }) {
   return (
-    <div className="flex min-h-56 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] p-8 text-sm text-slate-300">
-      <Loader2 className="mr-2 h-4 w-4 animate-spin text-cyan-200" />
-      {label}
+    <div className="space-y-4" role="status" aria-label={label}>
+      {[...Array(3)].map((_, i) => (
+        <SkeletonCard key={i} withMedia={false} lines={2} />
+      ))}
     </div>
   );
 }
 
-function EmptyState({
-  icon: Icon,
-  title,
-  body,
-  action,
-  accent = "cyan",
-}: {
-  icon: LucideIcon;
-  title: string;
-  body: string;
-  action: { label: string; to: string; icon: LucideIcon };
-  accent?: "cyan" | "amber";
-}) {
-  const ActionIcon = action.icon;
-  const isCyan = accent === "cyan";
 
-  return (
-    <div className="grid min-h-80 place-items-center rounded-xl border border-dashed border-white/15 bg-white/[0.02] p-8 text-center">
-      <div className="max-w-sm">
-        <div
-          className={`mx-auto flex h-16 w-16 items-center justify-center rounded-2xl ${
-            isCyan ? "bg-cyan-200/10 text-cyan-100" : "bg-amber-300/10 text-amber-200"
-          }`}
-        >
-          <Icon className="h-8 w-8" />
-        </div>
-        <h3 className="mt-5 text-xl font-semibold text-white">{title}</h3>
-        <p className="mt-3 text-sm leading-7 text-slate-400">{body}</p>
-        <Button
-          asChild
-          className={`mt-6 h-10 px-6 ${
-            isCyan
-              ? "bg-cyan-200 text-slate-950 hover:bg-cyan-100"
-              : "bg-amber-300 text-slate-950 hover:bg-amber-200"
-          }`}
-        >
-          <Link to={action.to}>
-            <ActionIcon className="h-4 w-4" />
-            {action.label}
-          </Link>
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 function DisconnectedProfile() {
   return (
@@ -717,10 +691,60 @@ function SavedPromptCard({
   );
 }
 
+function PublicCreatorListingCard({ prompt }: { prompt: PromptRecord }) {
+  return (
+    <article className="overflow-hidden rounded-xl border border-white/10 bg-[#0f1419] transition-colors hover:border-white/[0.18]">
+      <div className="grid md:grid-cols-[10rem_1fr]">
+        <img
+          src={prompt.imageUrl || promptImageFallback}
+          alt={prompt.title}
+          className="h-48 w-full object-cover md:h-full"
+        />
+        <div className="min-w-0 p-5 md:p-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className="border-emerald-300/30 bg-emerald-300/10 text-emerald-100">
+              <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+              Active listing
+            </Badge>
+            <Badge className="border-white/10 bg-white/[0.04] text-slate-300">
+              {prompt.category}
+            </Badge>
+          </div>
+          <h3 className="mt-4 text-xl font-semibold text-white">{prompt.title}</h3>
+          <p className="mt-2 line-clamp-2 text-sm leading-7 text-slate-400">
+            {prompt.previewText}
+          </p>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <p className="text-lg font-semibold text-white">
+              {formatPriceLabel(prompt.priceStroops)} XLM
+            </p>
+            <Button
+              asChild
+              className="h-10 bg-cyan-200 px-5 text-slate-950 hover:bg-cyan-100"
+            >
+              <Link to={buildPromptSharePath(prompt.id)}>
+                <ShoppingBag className="h-4 w-4" />
+                View listing
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function ProfilePage() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const viewAddress = searchParams.get("address");
+  const rawViewAddress = searchParams.get("address");
+  const parsedViewAddress = parseCreatorAddressParam(rawViewAddress);
+  const viewAddress = parsedViewAddress.ok ? parsedViewAddress.address : null;
+  const invalidViewAddress =
+    rawViewAddress != null && rawViewAddress.trim() !== "" && !parsedViewAddress.ok
+      ? parsedViewAddress.error
+      : null;
+
   const { address, network, signMessage, signTransaction } = useWallet();
   const { xlm, isLoading: isBalanceLoading } = useWalletBalance();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -731,29 +755,36 @@ export default function ProfilePage() {
   const [unlockStates, setUnlockStates] = useState<Record<string, UnlockState>>({});
 
   const isPublicView = Boolean(viewAddress) && viewAddress !== address;
-  const profileAddress = viewAddress ?? address;
+  const profileAddress = viewAddress ?? address ?? null;
+  const creatorShareUrl =
+    profileAddress != null ? buildCreatorShareUrl(profileAddress) : null;
+
+  const publicVerification = useCreatorVerification(profileAddress ?? undefined);
 
   const createdQuery = useQuery({
-    queryKey: ["created-prompts", address],
+    queryKey: ["created-prompts", profileAddress],
     queryFn: async () =>
-      address ? getPromptsByCreator(browserStellarConfig, address) : [],
-    enabled: Boolean(address),
+      profileAddress
+        ? getPromptsByCreator(browserStellarConfig, profileAddress)
+        : [],
+    enabled: Boolean(profileAddress),
   });
 
   const purchasedQuery = useQuery({
     queryKey: ["purchased-prompts", address],
     queryFn: async () =>
       address ? getPromptsByBuyer(browserStellarConfig, address) : [],
-    enabled: Boolean(address),
+    enabled: Boolean(address) && !isPublicView,
   });
 
   const savedQuery = useQuery({
     queryKey: ["saved-prompts", address],
     queryFn: async () => (address ? fetchSavedPrompts(address) : []),
-    enabled: Boolean(address),
+    enabled: Boolean(address) && !isPublicView,
   });
 
   const createdPrompts = createdQuery.data ?? [];
+  const publicListings = createdPrompts.filter((prompt) => prompt.active);
   const purchasedPrompts = purchasedQuery.data ?? [];
   const savedPrompts = savedQuery.data ?? [];
   const activeListingCount = createdPrompts.filter((p) => p.active).length;
@@ -887,6 +918,28 @@ export default function ProfilePage() {
     }
   };
 
+  if (invalidViewAddress) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white">
+        <Navigation />
+        <main className="mx-auto flex max-w-2xl flex-col items-center px-4 py-20 text-center">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-300">
+            <CircleOff className="h-7 w-7" />
+          </div>
+          <h1 className="text-2xl font-semibold">Invalid creator link</h1>
+          <p className="mt-3 text-sm text-slate-400">{invalidViewAddress}</p>
+          <Button asChild className="mt-8 bg-cyan-200 text-slate-950 hover:bg-cyan-100">
+            <Link to="/browse">
+              <ShoppingBag className="h-4 w-4" />
+              Browse marketplace
+            </Link>
+          </Button>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_60%_40%_at_0%_0%,rgba(34,211,238,0.1),transparent),radial-gradient(ellipse_50%_30%_at_100%_5%,rgba(251,191,36,0.07),transparent),linear-gradient(180deg,#080b0f_0%,#0d1117_50%,#080b0f_100%)] text-white">
       <Navigation />
@@ -905,6 +958,14 @@ export default function ProfilePage() {
                 ? "View this creator's public prompt listings and send a tip to support their work."
                 : "Manage listings you created and reopen prompts you purchased. This page reads directly from the Stellar contract and uses the unlock API only when you request the decrypted plaintext."}
             </p>
+            {creatorShareUrl && (isPublicView || address) && (
+              <ShareLinkButton
+                url={creatorShareUrl}
+                label="Copy profile link"
+                shareTitle="Prompt Mint creator"
+                shareText={`Browse this creator on Prompt Mint: ${shortenAddress(profileAddress!)}`}
+              />
+            )}
           </div>
 
           {address && !isPublicView && (
@@ -949,8 +1010,71 @@ export default function ProfilePage() {
           )}
         </section>
 
+        {profileAddress ? (
+          <ReputationSummary address={profileAddress} />
+        ) : null}
+
+        {profileAddress ? (
+          <CreatorReputationPanel address={profileAddress} />
+        ) : null}
+
         <div>
-          {!address ? (
+          {isPublicView && profileAddress ? (
+            <section className="space-y-6">
+              <div className="rounded-2xl border border-white/10 bg-[#0d1117] p-6">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                  Creator address
+                </p>
+                <p className="mt-2 font-mono text-sm text-slate-200 break-all">
+                  {profileAddress}
+                </p>
+                <div className="mt-3">
+                  <VerifiedCreatorBadge verification={publicVerification.verification} />
+                </div>
+                <p className="mt-3 text-sm text-slate-400">
+                  {activeListingCount} active listing
+                  {activeListingCount === 1 ? "" : "s"}
+                </p>
+              </div>
+
+              {createdQuery.isLoading ? (
+                <LoadingState label="Loading creator listings..." />
+              ) : publicListings.length === 0 ? (
+                <EmptyState
+                  variant="no-listings"
+                  title="No public listings"
+                  description="This creator does not currently have any active marketplace listings."
+                  action={
+                    <Button asChild className="bg-emerald-400 text-slate-950 hover:bg-emerald-300">
+                      <Link to="/browse">
+                        <ShoppingBag className="mr-2 h-4 w-4" />
+                        Browse marketplace
+                      </Link>
+                    </Button>
+                  }
+                />
+              ) : (
+                <div className="space-y-4">
+                  {publicListings.map((prompt) => (
+                    <PublicCreatorListingCard
+                      key={prompt.id.toString()}
+                      prompt={prompt}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {profileAddress ? (
+                <TransactionHistoryPanel
+                  walletAddress={profileAddress}
+                  role="creator"
+                  title="Creator sales history"
+                  description="Public sales activity for this creator wallet (metadata only — does not change unlock rights)."
+                  emptyMessage="No indexed sales yet for this creator."
+                />
+              ) : null}
+            </section>
+          ) : !address ? (
             <DisconnectedProfile />
           ) : (
             <>
@@ -988,7 +1112,7 @@ export default function ProfilePage() {
                     </p>
                   </div>
 
-                  <TabsList className="mb-6 grid h-auto w-full grid-cols-3 rounded-xl border border-white/10 bg-white/[0.03] p-1.5 sm:w-[48rem]">
+                  <TabsList className="mb-6 grid h-auto w-full grid-cols-2 rounded-xl border border-white/10 bg-white/[0.03] p-1.5 sm:grid-cols-5 sm:w-[56rem]">
                     <TabsTrigger
                       value="purchased"
                       aria-label="Open my library tab"
@@ -1022,6 +1146,22 @@ export default function ProfilePage() {
                         {savedPrompts.length}
                       </span>
                     </TabsTrigger>
+                    <TabsTrigger
+                      value="recently-viewed"
+                      aria-label="Open recently viewed tab"
+                      className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-slate-400 transition-all data-[state=active]:bg-purple-300 data-[state=active]:text-slate-950 data-[state=active]:shadow-sm"
+                    >
+                      <Clock className="h-4 w-4" />
+                      Recent
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="transactions"
+                      aria-label="Open purchase transaction history tab"
+                      className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-slate-400 transition-all data-[state=active]:bg-sky-300 data-[state=active]:text-slate-950 data-[state=active]:shadow-sm"
+                    >
+                      <Receipt className="h-4 w-4" />
+                      Transactions
+                    </TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="purchased" className="mt-0 space-y-4">
@@ -1029,15 +1169,17 @@ export default function ProfilePage() {
                       <LoadingState label="Loading your licensed prompts..." />
                     ) : purchasedPrompts.length === 0 ? (
                       <EmptyState
-                        icon={LibraryBig}
+                        variant="no-purchases"
                         title="Your library is empty"
-                        body="When this wallet buys access, prompts appear here with a direct unlock path back to the protected content."
-                        action={{
-                          label: "Browse marketplace",
-                          to: "/browse",
-                          icon: ShoppingBag,
-                        }}
-                        accent="cyan"
+                        description="When this wallet buys access, prompts appear here with a direct unlock path back to the protected content."
+                        action={
+                          <Button asChild className="bg-cyan-200 text-slate-950 hover:bg-cyan-100">
+                            <Link to="/browse">
+                              <ShoppingBag className="mr-2 h-4 w-4" />
+                              Browse marketplace
+                            </Link>
+                          </Button>
+                        }
                       />
                     ) : (
                       <div className="space-y-4">
@@ -1060,15 +1202,17 @@ export default function ProfilePage() {
                       <LoadingState label="Loading your creator inventory..." />
                     ) : createdPrompts.length === 0 ? (
                       <EmptyState
-                        icon={Boxes}
+                        variant="no-listings"
                         title="No creator inventory"
-                        body="Create your first encrypted prompt listing to see pricing controls, sales counts, and listing states here."
-                        action={{
-                          label: "Create listing",
-                          to: "/sell",
-                          icon: ArrowUpRight,
-                        }}
-                        accent="amber"
+                        description="Create your first encrypted prompt listing to see pricing controls, sales counts, and listing states here."
+                        action={
+                          <Button asChild className="bg-emerald-400 text-slate-950 hover:bg-emerald-300">
+                            <Link to="/sell">
+                              <ArrowUpRight className="mr-2 h-4 w-4" />
+                              Create listing
+                            </Link>
+                          </Button>
+                        }
                       />
                     ) : (
                       <div className="space-y-4">
@@ -1094,6 +1238,7 @@ export default function ProfilePage() {
                       </div>
                     )}
                     <div className="space-y-6 mt-6">
+                      <CreatorVerificationCard address={address} />
                       <WebhookSettings walletAddress={address} />
                       <NotificationPreferences walletAddress={address} />
                     </div>
@@ -1104,15 +1249,17 @@ export default function ProfilePage() {
                       <LoadingState label="Loading your saved listings..." />
                     ) : savedPrompts.length === 0 ? (
                       <EmptyState
-                        icon={Bookmark}
+                        variant="no-bookmarks"
                         title="No saved listings yet"
-                        body="Save marketplace prompts while browsing to keep a short list of listings you want to revisit or compare later."
-                        action={{
-                          label: "Browse marketplace",
-                          to: "/browse",
-                          icon: ShoppingBag,
-                        }}
-                        accent="cyan"
+                        description="Save marketplace prompts while browsing to keep a short list of listings you want to revisit or compare later."
+                        action={
+                          <Button asChild className="bg-emerald-400 text-slate-950 hover:bg-emerald-300">
+                            <Link to="/browse">
+                              <ShoppingBag className="mr-2 h-4 w-4" />
+                              Browse marketplace
+                            </Link>
+                          </Button>
+                        }
                       />
                     ) : (
                       <div className="space-y-4">
@@ -1128,6 +1275,20 @@ export default function ProfilePage() {
                         ))}
                       </div>
                     )}
+                  </TabsContent>
+
+                  <TabsContent value="recently-viewed" className="mt-0 space-y-4">
+                    <RecentlyViewed walletAddress={address} />
+                  </TabsContent>
+
+                  <TabsContent value="transactions" className="mt-0 space-y-4">
+                    <TransactionHistoryPanel
+                      walletAddress={address}
+                      role="buyer"
+                      title="Purchase history"
+                      description="Prompts this wallet bought on-chain or recorded via the license API."
+                      emptyMessage="No purchases recorded yet. Completed buys appear here with links to Stellar Expert when a tx hash is available."
+                    />
                   </TabsContent>
                 </Tabs>
               </section>

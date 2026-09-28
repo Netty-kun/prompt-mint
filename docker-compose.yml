@@ -1,0 +1,128 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: prompt-mint-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_ROOT_PASSWORD:-password}
+      MONGO_INITDB_DATABASE: prompt-mint
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    command: --replSet rs0
+    healthcheck:
+      test: echo "db.adminCommand('ping')" | mongosh -u ${MONGODB_ROOT_USER:-admin} -p ${MONGODB_ROOT_PASSWORD:-password} --authenticationDatabase admin || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    networks:
+      - prompt-mint-network
+
+  mongodb-init:
+    image: mongo:7.0
+    container_name: prompt-mint-mongodb-init
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    entrypoint: >
+      mongosh
+      -u ${MONGODB_ROOT_USER:-admin}
+      -p ${MONGODB_ROOT_PASSWORD:-password}
+      --authenticationDatabase admin
+      mongodb://mongodb:27017/admin
+      --eval "rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongodb:27017'}]})"
+    networks:
+      - prompt-mint-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: prompt-mint-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - prompt-mint-network
+
+  server:
+    build:
+      context: .
+      dockerfile: server.Dockerfile
+    container_name: prompt-mint-server
+    ports:
+      - "3000:3000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+    environment:
+      NODE_ENV: development
+      MONGODB_URI: mongodb://${MONGODB_ROOT_USER:-admin}:${MONGODB_ROOT_PASSWORD:-password}@mongodb:27017/prompt-mint?authSource=admin&replicaSet=rs0
+      REDIS_URL: redis://redis:6379
+      STELLAR_SCAFFOLD_ENV: ${STELLAR_SCAFFOLD_ENV:-development}
+      PUBLIC_STELLAR_NETWORK: ${PUBLIC_STELLAR_NETWORK:-TESTNET}
+      PUBLIC_STELLAR_NETWORK_PASSPHRASE: ${PUBLIC_STELLAR_NETWORK_PASSPHRASE:-"Test SDF Network ; September 2015"}
+      PUBLIC_STELLAR_RPC_URL: ${PUBLIC_STELLAR_RPC_URL:-https://soroban-testnet.stellar.org}
+      PUBLIC_STELLAR_HORIZON_URL: ${PUBLIC_STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-prompt-mint-server}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318}
+    volumes:
+      - ./server/src:/app/server/src
+      - ./server/package.json:/app/server/package.json
+    networks:
+      - prompt-mint-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: prompt-mint-jaeger
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+    networks:
+      - prompt-mint-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend.Dockerfile
+    container_name: prompt-mint-frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - server
+    environment:
+      VITE_API_BASE: http://localhost:3000
+      STELLAR_SCAFFOLD_ENV: ${STELLAR_SCAFFOLD_ENV:-development}
+      PUBLIC_STELLAR_NETWORK: ${PUBLIC_STELLAR_NETWORK:-TESTNET}
+      PUBLIC_STELLAR_NETWORK_PASSPHRASE: ${PUBLIC_STELLAR_NETWORK_PASSPHRASE:-"Test SDF Network ; September 2015"}
+      PUBLIC_STELLAR_RPC_URL: ${PUBLIC_STELLAR_RPC_URL:-https://soroban-testnet.stellar.org}
+      PUBLIC_STELLAR_HORIZON_URL: ${PUBLIC_STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}
+      PUBLIC_PROMPT_HASH_CONTRACT_ID: ${PUBLIC_PROMPT_HASH_CONTRACT_ID}
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./package.json:/app/package.json
+    networks:
+      - prompt-mint-network
+
+volumes:
+  mongodb_data:
+  mongodb_config:
+  redis_data:
+
+networks:
+  prompt-mint-network:
+    driver: bridge

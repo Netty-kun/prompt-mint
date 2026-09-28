@@ -1,5 +1,9 @@
 import { hasAccess, type PromptHashConfig } from "../../src/lib/stellar/promptHashClient";
+import { withBodySizeLimit } from "../../src/lib/api/bodySizeLimit";
 import { addReview, getReviews, type StoredReview } from "./data";
+import { negotiateVersion } from "../../src/lib/api/versionGuard";
+import { withVersion } from "../../src/lib/api/payloadVersion";
+import { apiError, ErrorCode } from "../../src/lib/api/errorCodes";
 
 interface ReviewSubmission {
   promptId: string;
@@ -26,31 +30,34 @@ function getServerConfig(): PromptHashConfig {
   };
 }
 
-export default async function handler(req: any, res: any) {
+async function handler(req: any, res: any) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
   }
 
+  const version = negotiateVersion(req, res);
+  if (!version) return;
+
   const { promptId, userAddress, rating, text }: ReviewSubmission = req.body;
 
   if (!promptId || !userAddress || !rating || !text) {
-    res.status(400).json({ error: "Missing required fields" });
+    res.status(400).json(apiError(ErrorCode.MISSING_FIELDS, "Missing required fields", undefined, version));
     return;
   }
 
   if (rating < 1 || rating > 5) {
-    res.status(400).json({ error: "Rating must be between 1 and 5" });
+    res.status(400).json(apiError(ErrorCode.INVALID_INPUT, "Rating must be between 1 and 5", undefined, version));
     return;
   }
 
   if (text.trim().length < 10) {
-    res.status(400).json({ error: "Review text must be at least 10 characters" });
+    res.status(400).json(apiError(ErrorCode.INVALID_INPUT, "Review text must be at least 10 characters", undefined, version));
     return;
   }
 
   if (text.length > 500) {
-    res.status(400).json({ error: "Review text must not exceed 500 characters" });
+    res.status(400).json(apiError(ErrorCode.INVALID_INPUT, "Review text must not exceed 500 characters", undefined, version));
     return;
   }
 
@@ -59,10 +66,9 @@ export default async function handler(req: any, res: any) {
     const access = await hasAccess(config, userAddress, promptId);
 
     if (!access) {
-      res.status(403).json({
-        error: "Only verified buyers can submit reviews",
-        verified: false,
-      });
+      res.status(403).json(
+        withVersion({ error: "Only verified buyers can submit reviews", verified: false }, version),
+      );
       return;
     }
 
@@ -70,7 +76,7 @@ export default async function handler(req: any, res: any) {
     const hasReviewed = existingReviews.some((r) => r.userAddress === userAddress);
 
     if (hasReviewed) {
-      res.status(409).json({ error: "You have already reviewed this prompt" });
+      res.status(409).json({ apiVersion: version, error: "You have already reviewed this prompt" });
       return;
     }
 
@@ -84,23 +90,31 @@ export default async function handler(req: any, res: any) {
       verified: true,
       helpfulVotes: 0,
       voters: [],
+      editHistory: [],
     };
 
     addReview(review);
 
     console.log(`✓ Review submitted for prompt ${promptId} by ${userAddress.slice(0, 8)}...`);
 
-    res.status(201).json({
-      success: true,
-      review: {
-        id: review.id,
-        rating: review.rating,
-        createdAt: review.createdAt,
-      },
-    });
+    res.status(201).json(
+      withVersion(
+        {
+          success: true,
+          review: {
+            id: review.id,
+            rating: review.rating,
+            createdAt: review.createdAt,
+          },
+        },
+        version,
+      ),
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to submit review";
     console.error("Review submission error:", message);
-    res.status(500).json({ error: message });
+    res.status(500).json(apiError(ErrorCode.TEMPORARY_FAILURE, message, undefined, version));
   }
 }
+
+export default withBodySizeLimit(handler);

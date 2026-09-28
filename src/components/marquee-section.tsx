@@ -13,8 +13,11 @@ import {
   Type,
   BarChart,
 } from "lucide-react";
+import { useReducedMotion } from "@/components/ReducedMotionProvider";
 
 export default function MarqueeSection() {
+  const { prefersReducedMotion } = useReducedMotion();
+
   const items1 = [
     { icon: <Sparkles className="size-4" />, text: "10,000+ AI Prompts" },
     { icon: <Zap className="size-4" />, text: "Instant Delivery" },
@@ -33,11 +36,19 @@ export default function MarqueeSection() {
     { icon: <Zap className="size-4" />, text: "Productivity Boosters" },
   ];
 
+  const marqueeClass = prefersReducedMotion
+    ? "flex whitespace-nowrap overflow-hidden"
+    : "flex whitespace-nowrap animate-marquee";
+
+  const marqueeReverseClass = prefersReducedMotion
+    ? "flex whitespace-nowrap overflow-hidden mt-3"
+    : "flex whitespace-nowrap animate-marquee-reverse mt-3";
+
   return (
     <section className="py-6  border-gray-800 overflow-hidden">
       <div className="relative">
-        {/* First marquee row - moves left to right */}
-        <div className="flex whitespace-nowrap animate-marquee">
+        {/* First marquee row */}
+        <div className={marqueeClass}>
           {[...items1, ...items1].map((item, index) => (
             <Badge
               key={`row1-${index}`}
@@ -50,8 +61,8 @@ export default function MarqueeSection() {
           ))}
         </div>
 
-        {/* Second marquee row - moves right to left */}
-        <div className="flex whitespace-nowrap animate-marquee-reverse mt-3">
+        {/* Second marquee row */}
+        <div className={marqueeReverseClass}>
           {[...items2, ...items2].map((item, index) => (
             <Badge
               key={`row2-${index}`}

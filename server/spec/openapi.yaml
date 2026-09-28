@@ -1,0 +1,2923 @@
+openapi: "3.1.0"
+info:
+  title: Prompt Mint API
+  version: "1.0.0"
+  description: |
+    Prompt Mint marketplace API — Express backend serving prompt listing,
+    user management, governance, appeals, licensing, webhooks, versioning,
+    notifications, analytics, and API key management.
+  contact:
+    name: Prompt Mint Team
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:5000
+    description: Local development server
+  - url: https://api.promptmint.io
+    description: Production server
+
+paths:
+  # ─── Health ────────────────────────────────────────────────────────────────
+  /health:
+    get:
+      operationId: getHealth
+      summary: Health check with indexer and backup statuses
+      tags: [Health]
+      responses:
+        "200":
+          description: Service health information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  # ─── Robots & SEO ──────────────────────────────────────────────────────────
+  /robots.txt:
+    get:
+      operationId: getRobotsTxt
+      summary: Return robots.txt
+      tags: [SEO]
+      responses:
+        "200":
+          description: robots.txt content
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/seo/controls:
+    get:
+      operationId: getSEOControls
+      summary: Get SEO control headers
+      tags: [SEO]
+      responses:
+        "200":
+          description: SEO control settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SEOControls"
+    post:
+      operationId: updateSEOControls
+      summary: Update SEO control headers
+      tags: [SEO]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SEOControls"
+      responses:
+        "200":
+          description: SEO controls updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SEOControls"
+
+  # ─── Improve Proxy ─────────────────────────────────────────────────────────
+  /api/improve-proxy:
+    post:
+      operationId: improvePrompt
+      summary: Proxy prompt improvement through external AI gateway
+      tags: [AI Proxy]
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+              description: Raw prompt text to improve
+      responses:
+        "200":
+          description: Improved prompt response from AI gateway
+          content:
+            application/json:
+              schema:
+                type: object
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+
+  # ─── Chat / Test Prompt ────────────────────────────────────────────────────
+  /api/chat:
+    post:
+      operationId: chatWithPrompt
+      summary: Test a prompt via AI proxy
+      tags: [AI Proxy]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestPromptRequest"
+      responses:
+        "200":
+          description: Streamed AI response
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/test-prompt:
+    post:
+      operationId: testPromptDirect
+      summary: Test a prompt (direct route)
+      tags: [AI Proxy]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestPromptRequest"
+      responses:
+        "200":
+          description: Streamed AI response
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # ─── Prompts ───────────────────────────────────────────────────────────────
+  /api/prompts:
+    get:
+      operationId: listPrompts
+      summary: List published prompts
+      tags: [Prompts]
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [Marketing, "Creative Writing", Programming, Music, Gaming, Other]
+          description: Filter by category
+        - name: walletAddress
+          in: query
+          schema:
+            type: string
+          description: Filter by owner wallet address
+      responses:
+        "200":
+          description: List of published prompts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Prompt"
+    post:
+      operationId: createPrompt
+      summary: Create a new prompt listing
+      tags: [Prompts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePromptRequest"
+      responses:
+        "201":
+          description: Prompt created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  prompt:
+                    $ref: "#/components/schemas/Prompt"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+
+  /api/prompts/{id}:
+    get:
+      operationId: getPromptDetail
+      summary: Get a single published prompt
+      tags: [Prompts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Prompt detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Prompt"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/prompts/{id}/publish:
+    post:
+      operationId: publishPrompt
+      summary: Publish a prompt (must be in 'ready' status)
+      tags: [Prompts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Prompt published
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  prompt:
+                    $ref: "#/components/schemas/Prompt"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/prompts/{id}/archive:
+    post:
+      operationId: archivePrompt
+      summary: Archive a prompt
+      tags: [Prompts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Prompt archived
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  prompt:
+                    $ref: "#/components/schemas/Prompt"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/prompts/{id}/submit-review:
+    post:
+      operationId: submitPromptForReview
+      summary: Submit a draft prompt for pre-publish review
+      tags: [Prompts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Prompt submitted for review
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  prompt:
+                    $ref: "#/components/schemas/Prompt"
+                  checklist:
+                    $ref: "#/components/schemas/ReviewChecklist"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/prompts/{id}/review-checklist:
+    patch:
+      operationId: updateReviewChecklist
+      summary: Update the pre-publish review checklist
+      tags: [Prompts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                checklist:
+                  $ref: "#/components/schemas/ReviewChecklist"
+      responses:
+        "200":
+          description: Checklist updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  checklist:
+                    $ref: "#/components/schemas/ReviewChecklist"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/prompts/{id}/tags:
+    post:
+      operationId: addPromptTags
+      summary: Add tags to a prompt
+      tags: [Prompts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tags]
+              properties:
+                tags:
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 30
+                  minItems: 1
+      responses:
+        "200":
+          description: Tags added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  tags:
+                    type: array
+                    items:
+                      type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: removePromptTags
+      summary: Remove tags from a prompt
+      tags: [Prompts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tags]
+              properties:
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 1
+      responses:
+        "200":
+          description: Tags removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  tags:
+                    type: array
+                    items:
+                      type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/prompts/{id}/versions:
+    post:
+      operationId: publishPromptVersion
+      summary: Publish a new version of a prompt
+      tags: [Prompts, Versions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                changeDescription:
+                  type: string
+      responses:
+        "201":
+          description: Version created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptVersion"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    get:
+      operationId: listPromptVersions
+      summary: List all versions for a prompt
+      tags: [Prompts, Versions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromptVersion"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/prompts/{id}/versions/{versionIndex}:
+    get:
+      operationId: getPromptVersionDetail
+      summary: Get a specific version of a prompt
+      tags: [Prompts, Versions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionIndex
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Version detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptVersion"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Buyer & Creator Prompt Endpoints ──────────────────────────────────────
+  /api/prompts/buyer/{walletAddress}/owned:
+    get:
+      operationId: getOwnedPrompts
+      summary: Get prompts owned by a wallet
+      tags: [Prompts, Buyers]
+      parameters:
+        - name: walletAddress
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Owned prompts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Prompt"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/prompts/buyer/{walletAddress}/transactions:
+    get:
+      operationId: getBuyerTransactions
+      summary: Get buyer transaction history
+      tags: [Prompts, Buyers]
+      parameters:
+        - name: walletAddress
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Transaction history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MarketplaceTransaction"
+
+  /api/prompts/buyer/{walletAddress}/saved:
+    get:
+      operationId: getSavedPrompts
+      summary: Get prompts saved by a wallet
+      tags: [Prompts, Buyers]
+      parameters:
+        - name: walletAddress
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Saved prompts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Prompt"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/prompts/buyer/save:
+    post:
+      operationId: savePrompt
+      summary: Save a prompt to a user's saved list
+      tags: [Prompts, Buyers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [promptId, walletAddress]
+              properties:
+                promptId:
+                  type: string
+                walletAddress:
+                  type: string
+      responses:
+        "200":
+          description: Prompt saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/prompts/buyer/unsave:
+    post:
+      operationId: unsavePrompt
+      summary: Remove a prompt from user's saved list
+      tags: [Prompts, Buyers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [promptId, walletAddress]
+              properties:
+                promptId:
+                  type: string
+                walletAddress:
+                  type: string
+      responses:
+        "200":
+          description: Prompt unsaved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/prompts/creator/{walletAddress}/transactions:
+    get:
+      operationId: getCreatorTransactions
+      summary: Get creator transaction history
+      tags: [Prompts, Creators]
+      parameters:
+        - name: walletAddress
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Transaction history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MarketplaceTransaction"
+
+  /api/prompts/creator/{walletAddress}/drafts:
+    get:
+      operationId: getDraftPrompts
+      summary: Get drafts for a creator
+      tags: [Prompts, Creators]
+      parameters:
+        - name: walletAddress
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Draft prompts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Prompt"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Reports ───────────────────────────────────────────────────────────────
+  /api/prompts/report:
+    post:
+      operationId: submitReport
+      summary: Submit a report on a prompt
+      tags: [Reports]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [promptId, reporterAddress, reason]
+              properties:
+                promptId:
+                  type: string
+                reporterAddress:
+                  type: string
+                reason:
+                  type: string
+                  enum: [quality-issue, misleading-content, plagiarism, harmful-content, copyright, other]
+                description:
+                  type: string
+      responses:
+        "201":
+          description: Report submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  reportId:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/prompts/reports:
+    get:
+      operationId: getReports
+      summary: Get reports (admin only)
+      tags: [Reports]
+      security:
+        - adminToken: []
+      parameters:
+        - name: promptId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reports list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Report"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/prompts/preview:
+    post:
+      operationId: recordPreview
+      summary: Record a prompt preview (privacy-safe)
+      tags: [Prompts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [promptId]
+              properties:
+                promptId:
+                  type: string
+      responses:
+        "200":
+          description: Preview recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/prompts/preview-stats:
+    get:
+      operationId: getPreviewStats
+      summary: Get preview statistics for a wallet's prompts
+      tags: [Prompts]
+      parameters:
+        - name: walletAddress
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Preview statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalPreviews:
+                    type: integer
+                  prompts:
+                    type: array
+                    items:
+                      type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Users ─────────────────────────────────────────────────────────────────
+  /api/user:
+    post:
+      operationId: createUser
+      summary: Register a new user or login existing
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [walletAddress]
+              properties:
+                walletAddress:
+                  type: string
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 30
+      responses:
+        "201":
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    $ref: "#/components/schemas/User"
+        "200":
+          description: Login successful (existing user)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    get:
+      operationId: getUsers
+      summary: Get users, optionally filtered by wallet
+      tags: [Users]
+      parameters:
+        - name: walletAddress
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User(s) found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    items:
+                      $ref: "#/components/schemas/User"
+                  - $ref: "#/components/schemas/User"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/user/preferences:
+    get:
+      operationId: getUserPreferences
+      summary: Get notification preferences for a wallet
+      tags: [Users]
+      parameters:
+        - name: walletAddress
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Notification preferences
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  preferences:
+                    $ref: "#/components/schemas/NotificationPreferences"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    put:
+      operationId: updateUserPreferences
+      summary: Update notification preferences
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [walletAddress, preferences]
+              properties:
+                walletAddress:
+                  type: string
+                preferences:
+                  $ref: "#/components/schemas/NotificationPreferences"
+      responses:
+        "200":
+          description: Preferences updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  preferences:
+                    $ref: "#/components/schemas/NotificationPreferences"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/user/export/challenge:
+    post:
+      operationId: generateExportChallenge
+      summary: Generate a Stellar challenge for data export
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                walletAddress:
+                  type: string
+      responses:
+        "200":
+          description: Challenge generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  challenge:
+                    type: string
+                  expiresAt:
+                    type: string
+                    format: date-time
+
+  /api/user/export:
+    post:
+      operationId: requestExport
+      summary: Request a signed data export
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                walletAddress:
+                  type: string
+                signature:
+                  type: string
+                challenge:
+                  type: string
+      responses:
+        "200":
+          description: Export initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exportId:
+                    type: string
+                  status:
+                    type: string
+                  message:
+                    type: string
+
+  /api/user/export/download/{exportId}:
+    get:
+      operationId: downloadExport
+      summary: Download a completed data export
+      tags: [Users]
+      parameters:
+        - name: exportId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Export file
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/user/delete/challenge:
+    post:
+      operationId: generateDeletionChallenge
+      summary: Generate a Stellar challenge for account deletion (#91)
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address:
+                  type: string
+      responses:
+        "200":
+          description: Challenge generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  challenge:
+                    type: string
+                  expiresAt:
+                    type: number
+                  nonce:
+                    type: string
+
+  /api/user/delete:
+    post:
+      operationId: requestAccountDeletion
+      summary: Delete the off-chain profile data for a wallet (#91)
+      description: >-
+        Signature-gated deletion of the caller's User profile, notifications,
+        and webhook subscriptions. Marketplace purchase/order records, votes,
+        and moderation reports are intentionally retained to preserve
+        on-chain access authority and audit integrity -- see
+        docs/legal/data-retention-policy.md.
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address:
+                  type: string
+                signature:
+                  type: string
+                token:
+                  type: string
+      responses:
+        "200":
+          description: Off-chain profile data deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  deleted:
+                    type: object
+                    properties:
+                      profile:
+                        type: boolean
+                      webhookSubscriptions:
+                        type: number
+                      notifications:
+                        type: number
+                  retained:
+                    type: object
+                    properties:
+                      collections:
+                        type: array
+                        items:
+                          type: string
+                      reason:
+                        type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # ─── Versions ──────────────────────────────────────────────────────────────
+  /api/versions/update:
+    post:
+      operationId: postPromptUpdate
+      summary: Post a new content version for a prompt
+      tags: [Versions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                promptId:
+                  type: string
+                content:
+                  type: string
+                changeDescription:
+                  type: string
+      responses:
+        "200":
+          description: Version created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptVersion"
+
+  /api/versions/{promptId}/history:
+    get:
+      operationId: getPromptVersionHistory
+      summary: Get version history for a prompt (metadata only)
+      tags: [Versions]
+      parameters:
+        - name: promptId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Version history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromptVersion"
+
+  /api/versions/purchase:
+    post:
+      operationId: recordPurchase
+      summary: Record a purchase at the current version index
+      tags: [Versions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                promptId:
+                  type: string
+                buyerWallet:
+                  type: string
+                transactionHash:
+                  type: string
+      responses:
+        "200":
+          description: Purchase recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  purchase:
+                    $ref: "#/components/schemas/Purchase"
+
+  /api/versions/buyer-version:
+    get:
+      operationId: getBuyerVersion
+      summary: Get the version a specific buyer purchased
+      tags: [Versions]
+      parameters:
+        - name: promptId
+          in: query
+          schema:
+            type: string
+        - name: buyerWallet
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Buyer version info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  promptId:
+                    type: string
+                  versionIndex:
+                    type: integer
+                  content:
+                    type: string
+
+  # ─── Governance ────────────────────────────────────────────────────────────
+  /api/governance/vote/{promptId}:
+    post:
+      operationId: castVote
+      summary: Cast an upvote on a prompt (buyers only)
+      tags: [Governance]
+      parameters:
+        - name: promptId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [voterWallet]
+              properties:
+                voterWallet:
+                  type: string
+      responses:
+        "201":
+          description: Vote cast
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  upvotes:
+                    type: integer
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Already voted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    delete:
+      operationId: removeVote
+      summary: Remove an upvote from a prompt
+      tags: [Governance]
+      parameters:
+        - name: promptId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [voterWallet]
+              properties:
+                voterWallet:
+                  type: string
+      responses:
+        "200":
+          description: Vote removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  upvotes:
+                    type: integer
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/governance/votes/{promptId}:
+    get:
+      operationId: getVoteCount
+      summary: Get upvote count for a prompt
+      tags: [Governance]
+      parameters:
+        - name: promptId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vote count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  promptId:
+                    type: string
+                  upvotes:
+                    type: integer
+
+  /api/governance/top:
+    get:
+      operationId: getTopRatedPrompts
+      summary: Get top-ranked prompts by votes
+      tags: [Governance]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        "200":
+          description: Top prompts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  prompts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        promptId:
+                          type: string
+                        upvotes:
+                          type: integer
+
+  # ─── Appeals ───────────────────────────────────────────────────────────────
+  /api/appeals:
+    post:
+      operationId: fileAppeal
+      summary: File a new appeal against a moderation decision
+      tags: [Appeals]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decisionId, appellantAddress, statement]
+              properties:
+                decisionId:
+                  type: string
+                appellantAddress:
+                  type: string
+                statement:
+                  type: string
+                evidenceRefs:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "201":
+          description: Appeal filed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  appeal:
+                    $ref: "#/components/schemas/Appeal"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/appeals/{id}:
+    get:
+      operationId: getAppeal
+      summary: Get appeal details by ID
+      tags: [Appeals]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Appeal details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appeal"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/appeals/decision/{decisionId}:
+    get:
+      operationId: getAppealsForDecision
+      summary: List appeals for a moderation decision
+      tags: [Appeals]
+      parameters:
+        - name: decisionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Appeals for decision
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  appeals:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Appeal"
+
+  /api/appeals/{id}/resolve:
+    post:
+      operationId: resolveAppeal
+      summary: Resolve an appeal (approve or reject)
+      tags: [Appeals]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolverAddress, outcome, reason]
+              properties:
+                resolverAddress:
+                  type: string
+                outcome:
+                  type: string
+                  enum: [approved, rejected]
+                reason:
+                  type: string
+                evidenceRefs:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Appeal resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  appeal:
+                    $ref: "#/components/schemas/Appeal"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/appeals/{id}/withdraw:
+    post:
+      operationId: withdrawAppeal
+      summary: Withdraw an appeal
+      tags: [Appeals]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [appellantAddress]
+              properties:
+                appellantAddress:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Appeal withdrawn
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  appeal:
+                    $ref: "#/components/schemas/Appeal"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # ─── License Terms ─────────────────────────────────────────────────────────
+  /api/license-terms/active:
+    get:
+      operationId: getActiveTerms
+      summary: Get the active license terms
+      tags: [License Terms]
+      responses:
+        "200":
+          description: Active license terms
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LicenseTerm"
+
+  /api/license-terms/version/{version}:
+    get:
+      operationId: getTermsByVersion
+      summary: Get license terms by version number
+      tags: [License Terms]
+      parameters:
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Terms for version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LicenseTerm"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/license-terms/listing/{promptId}:
+    get:
+      operationId: getListingTerms
+      summary: Get license terms for a specific listing
+      tags: [License Terms]
+      parameters:
+        - name: promptId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Listing terms
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LicenseTerm"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/license-terms/create:
+    post:
+      operationId: createLicenseTerm
+      summary: Create new license terms
+      tags: [License Terms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                version:
+                  type: integer
+                isActive:
+                  type: boolean
+      responses:
+        "201":
+          description: License terms created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LicenseTerm"
+
+  # ─── Webhooks ──────────────────────────────────────────────────────────────
+  /api/webhooks:
+    post:
+      operationId: registerWebhook
+      summary: Register a new webhook subscription
+      tags: [Webhooks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                events:
+                  type: array
+                  items:
+                    type: string
+                secret:
+                  type: string
+      responses:
+        "201":
+          description: Webhook registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookSubscription"
+    get:
+      operationId: getWebhook
+      summary: Get webhook subscription details
+      tags: [Webhooks]
+      responses:
+        "200":
+          description: Webhook subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookSubscription"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteWebhook
+      summary: Delete a webhook subscription
+      tags: [Webhooks]
+      responses:
+        "200":
+          description: Webhook deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /api/webhooks/rotate-secret:
+    post:
+      operationId: rotateWebhookSecret
+      summary: Rotate the webhook secret
+      tags: [Webhooks]
+      responses:
+        "200":
+          description: Secret rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  secret:
+                    type: string
+
+  /api/webhooks/test:
+    post:
+      operationId: testWebhook
+      summary: Send a test webhook event
+      tags: [Webhooks]
+      responses:
+        "200":
+          description: Test sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  deliveryId:
+                    type: string
+
+  /api/webhooks/deliveries:
+    get:
+      operationId: getWebhookDeliveries
+      summary: Get webhook delivery logs
+      tags: [Webhooks]
+      responses:
+        "200":
+          description: Delivery logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WebhookDelivery"
+
+  /api/webhooks/health:
+    get:
+      operationId: getWebhookHealth
+      summary: Get webhook endpoint health
+      tags: [Webhooks]
+      responses:
+        "200":
+          description: Webhook health
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded, disabled]
+                  active:
+                    type: boolean
+                  failureCount:
+                    type: integer
+                  lastDeliveredAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  lastAttempt:
+                    type: object
+                    nullable: true
+
+  /api/webhooks/dead-letters:
+    get:
+      operationId: getWebhookDeadLetters
+      summary: Get webhook dead-letter queue
+      tags: [Webhooks]
+      responses:
+        "200":
+          description: Dead letters
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WebhookDeadLetter"
+
+  /api/webhooks/dead-letters/{id}/replay:
+    post:
+      operationId: replayWebhookDeadLetter
+      summary: Replay a dead-letter webhook event
+      description: >-
+        Admin-token gated. Re-sends the stored envelope verbatim by default.
+        Set refreshTimestamp to re-stamp the envelope timestamp with the
+        current time before signing, which is required to redeliver an event
+        that has aged past a receiver's acceptance window. deliveryId is
+        preserved in both modes so a receiver that already processed the event
+        can dedupe it.
+      tags: [Webhooks]
+      security:
+        - adminToken: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshTimestamp:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Replay attempted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  statusCode:
+                    type: integer
+                  error:
+                    type: string
+                  replayedAt:
+                    type: string
+                    format: date-time
+                  refreshTimestamp:
+                    type: boolean
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/webhooks/replay/events:
+    get:
+      operationId: getWebhookReplayEvents
+      summary: List the webhook event catalog
+      description: >-
+        Events a creator may subscribe to, whether the indexer emits each one,
+        and a representative data object per event. Static metadata.
+      tags: [Webhooks]
+      responses:
+        "200":
+          description: Event catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WebhookReplayEvent"
+                  subscribable:
+                    type: array
+                    items:
+                      type: string
+                  acceptanceWindowSeconds:
+                    type: integer
+
+  /api/webhooks/replay/queue:
+    get:
+      operationId: getWebhookReplayQueue
+      summary: Get the replay queue for a wallet's webhook
+      description: >-
+        Dead-lettered events for the wallet's subscription, each with an
+        assessment of whether replaying it can succeed.
+      tags: [Webhooks]
+      parameters:
+        - name: walletAddress
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: resolved
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["true", "false"]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Replay queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookReplayQueue"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/webhooks/replay/preview:
+    post:
+      operationId: previewWebhookReplay
+      summary: Preview the envelope for a webhook event
+      description: >-
+        Builds the exact body and header set a receiver would see for an event
+        without delivering anything. Carries a fresh deliveryId and timestamp;
+        it is not what a dead-letter replay re-sends.
+      tags: [Webhooks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event]
+              properties:
+                event:
+                  type: string
+                data:
+                  type: object
+      responses:
+        "200":
+          description: Envelope preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookReplayPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # ─── Notifications ─────────────────────────────────────────────────────────
+  /api/notifications:
+    get:
+      operationId: getNotifications
+      summary: Get notifications for the current user
+      tags: [Notifications]
+      responses:
+        "200":
+          description: Notifications list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+
+  /api/notifications/export:
+    get:
+      operationId: exportNotifications
+      summary: Export the full notification history for a wallet
+      description: >
+        Returns every notification for the wallet (read and unread, newest
+        first) as a downloadable attachment. Use `format=csv` for CSV or the
+        default `format=json` for JSON.
+      tags: [Notifications]
+      parameters:
+        - name: walletAddress
+          in: query
+          required: true
+          description: Wallet address that owns the notification history.
+          schema:
+            type: string
+        - name: format
+          in: query
+          required: false
+          description: Export file format. Defaults to json.
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        "200":
+          description: Notification history attachment (CSV or JSON)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  walletAddress:
+                    type: string
+                  exportedAt:
+                    type: string
+                    format: date-time
+                  count:
+                    type: integer
+                  notifications:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notification"
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/notifications/{id}/read:
+    patch:
+      operationId: markNotificationRead
+      summary: Mark a notification as read
+      tags: [Notifications]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Prompt Order ──────────────────────────────────────────────────────────
+  /api/prompt-order:
+    get:
+      operationId: getPromptOrder
+      summary: Get custom prompt ordering for a wallet
+      tags: [Prompt Order]
+      responses:
+        "200":
+          description: Prompt order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptOrder"
+    put:
+      operationId: setPromptOrder
+      summary: Set custom prompt ordering
+      tags: [Prompt Order]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromptOrder"
+      responses:
+        "200":
+          description: Prompt order updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptOrder"
+
+  # ─── API Keys ──────────────────────────────────────────────────────────────
+  /api-keys:
+    get:
+      operationId: listApiKeys
+      summary: List API keys for the authenticated wallet
+      tags: [API Keys]
+      security:
+        - apiKeyQuery: []
+      responses:
+        "200":
+          description: API keys list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApiKey"
+    post:
+      operationId: createApiKey
+      summary: Create a new API key
+      tags: [API Keys]
+      security:
+        - apiKeyQuery: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                rateLimitTier:
+                  type: string
+                  enum: [basic, pro, enterprise]
+      responses:
+        "201":
+          description: API key created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key:
+                    type: string
+                  apiKey:
+                    $ref: "#/components/schemas/ApiKey"
+
+  /api-keys/{id}:
+    delete:
+      operationId: revokeApiKey
+      summary: Revoke an API key
+      tags: [API Keys]
+      security:
+        - apiKeyQuery: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: API key revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api-keys/{id}/rotate:
+    post:
+      operationId: rotateApiKey
+      summary: Rotate an API key
+      tags: [API Keys]
+      security:
+        - apiKeyQuery: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: API key rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key:
+                    type: string
+                  apiKey:
+                    $ref: "#/components/schemas/ApiKey"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Analytics Rollups ─────────────────────────────────────────────────────
+  /api/analytics-rollups:
+    get:
+      operationId: getAnalyticsRollups
+      summary: Get analytics rollup data
+      tags: [Analytics]
+      responses:
+        "200":
+          description: Analytics rollups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AnalyticsRollup"
+
+  /api/analytics-rollups/trigger:
+    post:
+      operationId: triggerAnalyticsRollup
+      summary: Trigger an analytics rollup computation
+      tags: [Analytics]
+      responses:
+        "200":
+          description: Rollup triggered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+components:
+  securitySchemes:
+    adminToken:
+      type: http
+      scheme: bearer
+      description: Admin API token from ADMIN_API_TOKEN env var
+    apiKeyQuery:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: API key for programmatic access
+
+  responses:
+    BadRequest:
+      description: Bad request — missing or invalid fields
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              code:
+                type: string
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              code:
+                type: string
+    Unprocessable:
+      description: Unprocessable entity — validation failed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              code:
+                type: string
+    ServiceUnavailable:
+      description: Service temporarily degraded
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+    GatewayTimeout:
+      description: Request timed out
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+
+  schemas:
+    # ── Health ────────────────────────────────────────────────────────────────
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        indexer:
+          type: object
+          properties:
+            lastProcessedLedger:
+              type: integer
+            timestamp:
+              type: string
+              format: date-time
+        backup:
+          type: object
+          properties:
+            lastBackupAt:
+              type: string
+              format: date-time
+              nullable: true
+            status:
+              type: string
+
+    # ── SEO ───────────────────────────────────────────────────────────────────
+    SEOControls:
+      type: object
+      properties:
+        xRobotsTag:
+          type: string
+          example: noindex
+
+    # ── Prompt ────────────────────────────────────────────────────────────────
+    Prompt:
+      type: object
+      properties:
+        _id:
+          type: string
+        image:
+          type: string
+        title:
+          type: string
+          minLength: 3
+          maxLength: 100
+        content:
+          type: string
+        rating:
+          type: number
+          minimum: 1
+          maximum: 5
+        owner:
+          type: object
+          properties:
+            _id:
+              type: string
+            username:
+              type: string
+            walletAddress:
+              type: string
+        price:
+          type: number
+          minimum: 0
+        category:
+          type: string
+          enum: [Marketing, "Creative Writing", Programming, Music, Gaming, Other]
+        isActive:
+          type: boolean
+        listingStatus:
+          type: string
+          enum: [draft, ready, published, archived]
+        reviewChecklist:
+          $ref: "#/components/schemas/ReviewChecklist"
+        tags:
+          type: array
+          items:
+            type: string
+            maxLength: 30
+          maxItems: 10
+        salesCount:
+          type: integer
+          minimum: 0
+        currentVersionIndex:
+          type: integer
+        termsVersion:
+          type: integer
+        onChainId:
+          type: string
+          nullable: true
+        similarityFlag:
+          type: string
+          enum: [clean, suspicious, highly_similar]
+        similarityScore:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreatePromptRequest:
+      type: object
+      required: [image, title, content, walletAddress, price]
+      properties:
+        image:
+          type: string
+        title:
+          type: string
+          minLength: 3
+          maxLength: 100
+        content:
+          type: string
+          minLength: 10
+        walletAddress:
+          type: string
+        price:
+          type: number
+          minimum: 0
+        category:
+          type: string
+          enum: [Marketing, "Creative Writing", Programming, Music, Gaming, Other]
+
+    ReviewChecklist:
+      type: object
+      properties:
+        contentQuality:
+          type: boolean
+        imageValid:
+          type: boolean
+        pricingSet:
+          type: boolean
+        categoryAssigned:
+          type: boolean
+        termsAccepted:
+          type: boolean
+
+    # ── Test Prompt ───────────────────────────────────────────────────────────
+    TestPromptRequest:
+      type: object
+      required: [previewPrompt, userInput]
+      properties:
+        previewPrompt:
+          type: string
+        userInput:
+          type: string
+
+    # ── User ──────────────────────────────────────────────────────────────────
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+        walletAddress:
+          type: string
+        username:
+          type: string
+          minLength: 3
+          maxLength: 30
+        rating:
+          type: number
+          minimum: 1
+          maximum: 5
+        notificationPreferences:
+          $ref: "#/components/schemas/NotificationPreferences"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    NotificationPreferences:
+      type: object
+      properties:
+        promptPurchased:
+          type: boolean
+        promptUpdated:
+          type: boolean
+        newReviews:
+          type: boolean
+        priceAlerts:
+          type: boolean
+        emailNotifications:
+          type: boolean
+
+    # ── Versions ──────────────────────────────────────────────────────────────
+    PromptVersion:
+      type: object
+      properties:
+        _id:
+          type: string
+        promptId:
+          type: string
+        versionIndex:
+          type: integer
+        content:
+          type: string
+        changeDescription:
+          type: string
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    # ── Marketplace Transaction ───────────────────────────────────────────────
+    MarketplaceTransaction:
+      type: object
+      properties:
+        _id:
+          type: string
+        promptId:
+          type: string
+        buyerWallet:
+          type: string
+        sellerWallet:
+          type: string
+        amount:
+          type: number
+        transactionHash:
+          type: string
+        status:
+          type: string
+          enum: [pending, completed, failed]
+        createdAt:
+          type: string
+          format: date-time
+
+    # ── Purchase ──────────────────────────────────────────────────────────────
+    Purchase:
+      type: object
+      properties:
+        _id:
+          type: string
+        promptId:
+          type: string
+        buyerWallet:
+          type: string
+        versionIndex:
+          type: integer
+        transactionHash:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    # ── Vote ──────────────────────────────────────────────────────────────────
+    Vote:
+      type: object
+      properties:
+        _id:
+          type: string
+        promptId:
+          type: string
+        voterWallet:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    # ── Appeal ────────────────────────────────────────────────────────────────
+    Appeal:
+      type: object
+      properties:
+        _id:
+          type: string
+        decisionId:
+          type: string
+        appellantAddress:
+          type: string
+        statement:
+          type: string
+        evidenceRefs:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected, withdrawn]
+        resolverAddress:
+          type: string
+          nullable: true
+        resolutionReason:
+          type: string
+          nullable: true
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # ── License Term ──────────────────────────────────────────────────────────
+    LicenseTerm:
+      type: object
+      properties:
+        _id:
+          type: string
+        content:
+          type: string
+        version:
+          type: integer
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    # ── Reports ───────────────────────────────────────────────────────────────
+    Report:
+      type: object
+      properties:
+        _id:
+          type: string
+        promptId:
+          type: string
+        reporterAddress:
+          type: string
+        reason:
+          type: string
+          enum: [quality-issue, misleading-content, plagiarism, harmful-content, copyright, other]
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    # ── Webhooks ──────────────────────────────────────────────────────────────
+    WebhookSubscription:
+      type: object
+      properties:
+        _id:
+          type: string
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    WebhookDelivery:
+      type: object
+      properties:
+        _id:
+          type: string
+        webhookId:
+          type: string
+        event:
+          type: string
+        payload:
+          type: object
+        status:
+          type: string
+          enum: [success, failed, pending]
+        statusCode:
+          type: integer
+        attempts:
+          type: integer
+        deliveredAt:
+          type: string
+          format: date-time
+
+    WebhookDeadLetter:
+      type: object
+      properties:
+        _id:
+          type: string
+        subscriptionId:
+          type: string
+        event:
+          type: string
+        payload:
+          $ref: "#/components/schemas/WebhookPayload"
+        attempts:
+          type: integer
+        lastError:
+          type: string
+          nullable: true
+        lastStatusCode:
+          type: integer
+          nullable: true
+        resolved:
+          type: boolean
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        replayCount:
+          type: integer
+        lastReplayedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    WebhookPayload:
+      type: object
+      properties:
+        version:
+          type: integer
+        schemaVersion:
+          type: string
+        event:
+          type: string
+        deliveryId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        data:
+          type: object
+
+    WebhookReplayEvent:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        dispatched:
+          type: boolean
+          description: Whether the indexer currently emits this event.
+        subscribable:
+          type: boolean
+          description: Whether a creator may list this event when registering a subscription.
+        sampleData:
+          type: object
+
+    WebhookReplayAssessment:
+      type: object
+      description: >-
+        Per-row verdict on whether replaying a dead letter can succeed. The
+        timestamp of a stored envelope never changes on a verbatim replay, so a
+        dead letter older than acceptanceWindowSeconds is flagged `stale`:
+        a receiver following server/docs/webhook-signatures.md is expected to
+        reject it unless the replay is re-stamped.
+      properties:
+        deliveryId:
+          type: string
+        event:
+          type: string
+        originalTimestamp:
+          type: string
+        ageSeconds:
+          type: integer
+          nullable: true
+        fingerprint:
+          type: string
+          description: SHA-256 of the canonical payload JSON; unchanged by a verbatim replay.
+        replayable:
+          type: boolean
+        stale:
+          type: boolean
+        warnings:
+          type: array
+          items:
+            type: string
+            enum: [already_resolved, stale_event, unparseable_timestamp, subscription_missing, subscription_inactive]
+
+    WebhookReplayQueueItem:
+      type: object
+      properties:
+        id:
+          type: string
+        event:
+          type: string
+        attempts:
+          type: integer
+        lastError:
+          type: string
+          nullable: true
+        lastStatusCode:
+          type: integer
+          nullable: true
+        resolved:
+          type: boolean
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        replayCount:
+          type: integer
+        lastReplayedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        payload:
+          $ref: "#/components/schemas/WebhookPayload"
+        subscription:
+          type: object
+          nullable: true
+          description: Delivery target for this dead letter. Never contains the subscription secret.
+          properties:
+            id:
+              type: string
+            url:
+              type: string
+            active:
+              type: boolean
+        replay:
+          $ref: "#/components/schemas/WebhookReplayAssessment"
+
+    WebhookReplayQueue:
+      type: object
+      properties:
+        summary:
+          type: object
+          properties:
+            total:
+              type: integer
+            pending:
+              type: integer
+            resolved:
+              type: integer
+            replayable:
+              type: integer
+            stale:
+              type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WebhookReplayQueueItem"
+        acceptanceWindowSeconds:
+          type: integer
+
+    WebhookReplayPreview:
+      type: object
+      description: >-
+        The exact envelope and header set a receiver would see for an event,
+        built without contacting anything. The preview always carries a fresh
+        deliveryId and timestamp; replaying a dead letter re-sends the stored
+        envelope instead.
+      properties:
+        event:
+          type: string
+        schemaVersion:
+          type: string
+        payload:
+          $ref: "#/components/schemas/WebhookPayload"
+        body:
+          type: string
+          description: Exact request body a receiver would verify.
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        acceptanceWindowSeconds:
+          type: integer
+
+    # ── Notifications ─────────────────────────────────────────────────────────
+    Notification:
+      type: object
+      properties:
+        _id:
+          type: string
+        userId:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+        read:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    # ── Prompt Order ──────────────────────────────────────────────────────────
+    PromptOrder:
+      type: object
+      properties:
+        _id:
+          type: string
+        walletAddress:
+          type: string
+        promptIds:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # ── API Key ───────────────────────────────────────────────────────────────
+    ApiKey:
+      type: object
+      properties:
+        _id:
+          type: string
+        prefix:
+          type: string
+        ownerWallet:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        rateLimitTier:
+          type: string
+          enum: [basic, pro, enterprise]
+        revoked:
+          type: boolean
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    # ── Analytics ─────────────────────────────────────────────────────────────
+    AnalyticsRollup:
+      type: object
+      properties:
+        _id:
+          type: string
+        period:
+          type: string
+          enum: [daily, weekly, monthly]
+        periodStart:
+          type: string
+          format: date-time
+        metrics:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+
+tags:
+  - name: Health
+    description: Service health and monitoring
+  - name: SEO
+    description: Robots.txt and SEO controls
+  - name: AI Proxy
+    description: AI prompt improvement and testing proxies
+  - name: Prompts
+    description: Prompt listing CRUD and lifecycle management
+  - name: Buyers
+    description: Buyer-specific prompt queries
+  - name: Creators
+    description: Creator-specific prompt queries
+  - name: Reports
+    description: Content reporting and moderation
+  - name: Users
+    description: User registration and preferences
+  - name: Versions
+    description: Prompt version management
+  - name: Governance
+    description: Community voting and governance
+  - name: Appeals
+    description: Moderation decision appeals
+  - name: License Terms
+    description: License terms management
+  - name: Webhooks
+    description: Webhook subscriptions and delivery
+  - name: Notifications
+    description: User notifications
+  - name: Prompt Order
+    description: Custom prompt ordering
+  - name: API Keys
+    description: API key management for programmatic access
+  - name: Analytics
+    description: Analytics rollup data and computation

@@ -92,5 +92,5 @@ export function buildChecklistItems(formData: {
   fullPrompt: string;
   priceXlm: string;
 }): ChecklistItem[] {
-  return buildListingChecklistItems(formData);
+  return buildListingChecklistItems(formData as any);
 }

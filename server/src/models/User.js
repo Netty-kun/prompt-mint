@@ -22,6 +22,17 @@ const userSchema = new mongoose.Schema(
       min: 1,
       max: 5,
     },
+    verifiedLinks: {
+      type: [
+        {
+          label: { type: String, required: true, trim: true, maxlength: 40 },
+          url: { type: String, required: true, trim: true },
+          verifiedAt: { type: Date, required: true },
+          verificationMethod: { type: String, required: true, trim: true },
+        },
+      ],
+      default: [],
+    },
     notificationPreferences: {
       promptPurchased: { type: Boolean, default: true },
       promptUpdated: { type: Boolean, default: true },

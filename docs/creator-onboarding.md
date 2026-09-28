@@ -365,8 +365,10 @@ Your listing is live, but how do buyers find it?
 ### How to Get Your First Sales
 
 1. **Share Your Profile Link**
-   - Go to your creator profile (click your name)
-   - Copy the link
+   - Open your wallet profile (`/profile`) after connecting
+   - Click **Copy profile link** to copy a shareable URL shaped like `/creator/<your-stellar-address>`
+   - Legacy links shaped like `/profile?address=<your-stellar-address>` also work
+   - Individual listings can be shared with **Copy link** on the listing modal (`/prompt/<id>`)
    - Share on:
      - Twitter/X (mention #PromptHash #Stellar)
      - LinkedIn (AI/automation community)

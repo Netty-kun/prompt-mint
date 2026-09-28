@@ -1,5 +1,6 @@
 import express from "express";
 import asyncHandler from "express-async-handler";
+import { AppError } from "../lib/AppError";
 import Vote from "../models/Vote";
 import Purchase from "../models/Purchase";
 
@@ -23,8 +24,7 @@ governanceRouter.post(
     const { voterWallet } = req.body as { voterWallet?: string };
 
     if (!voterWallet) {
-      res.status(400).json({ error: "voterWallet is required" });
-      return;
+      throw new AppError("voterWallet is required", 400, "MISSING_FIELDS");
     }
 
     // Eligibility: voter must have purchased this prompt
@@ -34,8 +34,7 @@ governanceRouter.post(
     });
 
     if (!hasPurchased) {
-      res.status(403).json({ error: "Only buyers may vote on a prompt" });
-      return;
+      throw new AppError("Only buyers may vote on a prompt", 403);
     }
 
     try {
@@ -45,7 +44,7 @@ governanceRouter.post(
     } catch (err: unknown) {
       // Duplicate key = already voted
       if ((err as { code?: number }).code === 11000) {
-        res.status(409).json({ error: "You have already voted for this prompt" });
+        throw new AppError("You have already voted for this prompt", 409);
       } else {
         throw err;
       }
@@ -62,8 +61,7 @@ governanceRouter.delete(
     const { voterWallet } = req.body as { voterWallet?: string };
 
     if (!voterWallet) {
-      res.status(400).json({ error: "voterWallet is required" });
-      return;
+      throw new AppError("voterWallet is required", 400, "MISSING_FIELDS");
     }
 
     const deleted = await Vote.findOneAndDelete({
@@ -72,8 +70,7 @@ governanceRouter.delete(
     });
 
     if (!deleted) {
-      res.status(404).json({ error: "Vote not found" });
-      return;
+      throw new AppError("Vote not found", 404);
     }
 
     const count = await Vote.countDocuments({ promptId });

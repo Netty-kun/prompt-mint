@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useMousePosition } from "@/hooks/use-mouse-position";
+import { useReducedMotion } from "@/components/ReducedMotionProvider";
 
 interface SparklesProps {
   id?: string;
@@ -24,6 +25,7 @@ export const SparklesCore = ({
 }: SparklesProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mousePosition = useMousePosition();
+  const { prefersReducedMotion } = useReducedMotion();
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
 
   useEffect(() => {
@@ -76,7 +78,6 @@ export const SparklesCore = ({
         // @ts-expect-error
         if (this.y < 0) this.y = canvas.height;
 
-        // Mouse interaction
         const dx = mousePosition.x - this.x;
         const dy = mousePosition.y - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
@@ -115,8 +116,16 @@ export const SparklesCore = ({
       animationFrameId = requestAnimationFrame(animate);
     };
 
-    init();
-    animate();
+    if (prefersReducedMotion) {
+      init();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      particles.forEach((particle) => {
+        particle.draw();
+      });
+    } else {
+      init();
+      animate();
+    }
 
     const handleResize = () => {
       if (typeof window === "undefined") return;
@@ -143,6 +152,7 @@ export const SparklesCore = ({
     particleDensity,
     mousePosition.x,
     mousePosition.y,
+    prefersReducedMotion,
   ]);
 
   return (

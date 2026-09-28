@@ -1,6 +1,7 @@
 import React from "react";
 import { BarChart3, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/Skeleton";
 
 interface DashboardStats {
   totalListings: number;
@@ -35,14 +36,22 @@ export function CreatorDashboard({
 
   if (isLoading) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-8 space-y-6">
+      <div
+        className="rounded-2xl border border-white/10 bg-white/5 p-8 space-y-6"
+        role="status"
+        aria-label="Loading dashboard"
+      >
         <div className="flex items-center gap-3">
           <BarChart3 className="h-6 w-6 text-slate-400" />
           <h3 className="text-lg font-semibold text-white">Dashboard</h3>
         </div>
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 text-slate-400 animate-spin" />
-          <span className="ml-3 text-slate-400">Loading dashboard...</span>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="rounded-lg bg-slate-900/50 p-4 border border-white/5 space-y-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-7 w-12" />
+            </div>
+          ))}
         </div>
       </div>
     );

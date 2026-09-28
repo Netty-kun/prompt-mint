@@ -1,6 +1,7 @@
 
-import { AlertTriangle, CheckCircle2, KeyRound, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
+import { AlertTriangle, KeyRound, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AnimatedCheckmark } from "@/components/AnimatedCheckmark";
 
 export type UnlockState =
   | "idle"
@@ -9,7 +10,9 @@ export type UnlockState =
   | "success"
   | "rejected"
   | "expired"
-  | "failed";
+  | "failed"
+  /** The decrypted content did not match the hash committed on-chain. Content is withheld. */
+  | "integrity_failed";
 
 export interface UnlockExplainerProps {
   state: UnlockState;
@@ -54,6 +57,11 @@ const STATE_COPY: Partial<
     title: "Unlock verification failed",
     body: "The unlock service could not verify your signature. This may be a temporary network issue. Your purchase is recorded on-chain and is not affected. Retry to try again.",
   },
+  integrity_failed: {
+    tone: "error",
+    title: "Content integrity check failed",
+    body: "The decrypted content does not match the hash committed by the creator on-chain. This may indicate the listing was tampered with after purchase. Content has been withheld for your protection. Please contact support and quote the prompt ID — your on-chain license is unaffected.",
+  },
 };
 
 const toneStyles = {
@@ -85,7 +93,7 @@ const toneStyles = {
 
 const ToneIcon = ({ tone }: { tone: "info" | "success" | "warn" | "error" }) => {
   const cls = "h-5 w-5 shrink-0";
-  if (tone === "success") return <CheckCircle2 className={cls} />;
+  if (tone === "success") return <AnimatedCheckmark size={20} className="shrink-0" />;
   if (tone === "warn") return <AlertTriangle className={cls} />;
   if (tone === "error") return <XCircle className={cls} />;
   return <ShieldCheck className={cls} />;

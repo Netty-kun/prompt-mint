@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, Clock, Edit3, Eye, Send, Archive, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/hooks/useWallet";
+import { Skeleton, SkeletonText } from "@/components/Skeleton";
 
 interface DraftPrompt {
   _id: string;
@@ -80,9 +81,23 @@ export function DraftManager() {
 
   if (draftsQuery.isLoading) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-3" role="status" aria-label="Loading draft listings">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-24 animate-pulse rounded-xl bg-white/5" />
+          <div key={i} className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex items-center gap-2">
+                  <SkeletonText className="w-40" />
+                  <Skeleton className="h-4 w-14 rounded-full" />
+                </div>
+                <SkeletonText className="w-32" />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-8 w-20" />
+              </div>
+            </div>
+          </div>
         ))}
       </div>
     );

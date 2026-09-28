@@ -1,14 +1,17 @@
 import { useMemo, useState } from "react";
-import { Filter, Search, X } from "lucide-react";
+import { Filter, X } from "lucide-react";
 import { featuredPromptTemplates } from "@/data/featuredPrompts";
 import { Navigation } from "@/components/navigation";
 import { Footer } from "@/components/footer";
 import { FeaturedPrompts } from "@/components/featured-prompts";
+import { SEOHead } from "@/components/seo/SEOHead";
+import { useModalShortcut } from "@/providers/KeyboardShortcutsProvider";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { MarketplaceFilters } from "@/components/MarketplaceFilters";
+import { SearchBar } from "@/components/SearchBar";
 import FetchAllPrompts from "./FetchAllPrompts";
 import { HeroAnimation } from "./HeroAnimation";
+import { ComparisonTray } from "./ComparisonTray";
 
 const categories = Array.from(
   new Set(featuredPromptTemplates.map((prompt) => prompt.category)),
@@ -16,33 +19,59 @@ const categories = Array.from(
 const tags = ["AI", "Creative", "Product", "Sales", "Finance", "Support"];
 
 export default function BrowsePage() {
+  const defaultOG = {
+    title: "Prompt Mint Marketplace — Buy & Sell AI Prompts on Stellar",
+    description: "Discover, compare, and purchase premium AI prompt licenses. Secure wallet-verified marketplace on the Stellar blockchain.",
+  };
   const [priceRange, setPriceRange] = useState([0, 25]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedTag, setSelectedTag] = useState("");
+  const [creatorQuery, setCreatorQuery] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const [sortBy, setSortBy] = useState("recent");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
+  useModalShortcut("filters", () => setIsFilterOpen(false), isFilterOpen);
+
+  const toggleCategory = (cat) => {
+    setSelectedCategories((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat],
+    );
+  };
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
-    if (selectedCategory) count++;
+    if (selectedCategories.length > 0) count++;
     if (selectedTag) count++;
     if (searchQuery) count++;
+    if (creatorQuery) count++;
+    if (showInactive) count++;
     if (sortBy !== "recent") count++;
     if (priceRange[0] !== 0 || priceRange[1] !== 25) count++;
     return count;
-  }, [selectedCategory, selectedTag, searchQuery, sortBy, priceRange]);
+  }, [selectedCategories, selectedTag, searchQuery, creatorQuery, showInactive, sortBy, priceRange]);
 
   const handleClearFilters = () => {
     setSearchQuery("");
-    setSelectedCategory("");
+    setSelectedCategories([]);
     setSelectedTag("");
+    setCreatorQuery("");
+    setShowInactive(false);
     setSortBy("recent");
     setPriceRange([0, 25]);
   };
 
   return (
     <div className="min-h-screen bg-[#020617] text-white selection:bg-emerald-500/30">
+      <SEOHead
+        listingMetadata={{
+          title: defaultOG.title,
+          description: defaultOG.description,
+          imageUrl: "/og-image.png",
+          category: "marketplace",
+        }}
+      />
       <Navigation />
 
       {/* Marketplace Header */}
@@ -99,33 +128,32 @@ export default function BrowsePage() {
               <MarketplaceFilters
                 categories={categories}
                 tags={tags}
-                selectedCategory={selectedCategory}
-                setSelectedCategory={setSelectedCategory}
+                selectedCategories={selectedCategories}
+                toggleCategory={toggleCategory}
                 selectedTag={selectedTag}
                 setSelectedTag={setSelectedTag}
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
+                creatorQuery={creatorQuery}
+                setCreatorQuery={setCreatorQuery}
                 priceRange={priceRange}
                 setPriceRange={setPriceRange}
                 sortBy={sortBy}
                 setSortBy={setSortBy}
+                showInactive={showInactive}
+                setShowInactive={setShowInactive}
                 onClear={handleClearFilters}
               />
             </div>
           </aside>
 
           <div className="flex-1 space-y-8">
-            {/* Search bar */}
+            {/* Search bar (#276: debounced + recent-search history) */}
             <div className="flex items-stretch gap-3">
-              <div className="relative flex-1 group">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-emerald-400 transition-colors" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by title, description, or tags..."
-                  className="h-14 pl-12 pr-4 rounded-2xl border-white/5 bg-white/[0.03] text-base placeholder:text-slate-500 focus-visible:ring-emerald-500/20 transition-all"
-                />
-              </div>
+              <SearchBar
+                initialValue={searchQuery}
+                onSearch={setSearchQuery}
+              />
               <div className="relative lg:hidden">
                 <Button
                   variant="outline"
@@ -144,11 +172,13 @@ export default function BrowsePage() {
             </div>
 
             <FetchAllPrompts
-              selectedCategory={selectedCategory}
+              selectedCategories={selectedCategories}
               selectedTag={selectedTag}
               priceRange={priceRange}
               searchQuery={searchQuery}
+              creatorQuery={creatorQuery}
               sortBy={sortBy}
+              showInactive={showInactive}
             />
           </div>
         </div>
@@ -176,16 +206,20 @@ export default function BrowsePage() {
             <MarketplaceFilters
               categories={categories}
               tags={tags}
-              selectedCategory={selectedCategory}
-              setSelectedCategory={setSelectedCategory}
+              selectedCategories={selectedCategories}
+              toggleCategory={toggleCategory}
               selectedTag={selectedTag}
               setSelectedTag={setSelectedTag}
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
+              creatorQuery={creatorQuery}
+              setCreatorQuery={setCreatorQuery}
               priceRange={priceRange}
               setPriceRange={setPriceRange}
               sortBy={sortBy}
               setSortBy={setSortBy}
+              showInactive={showInactive}
+              setShowInactive={setShowInactive}
               onClear={handleClearFilters}
             />
             <Button
@@ -198,6 +232,7 @@ export default function BrowsePage() {
         </div>
       )}
 
+      <ComparisonTray />
       <Footer />
     </div>
   );

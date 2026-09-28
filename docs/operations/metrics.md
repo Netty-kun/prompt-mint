@@ -60,5 +60,69 @@ This document defines the core observability metrics emitted by the application,
 - **Ownership:** Backend Team
 - **Type:** Counter
 
+### 7. `analytics_event_total`
+- **Description:** Volume of accepted, privacy-safe product analytics events.
+- **Unit:** Count
+- **Labels:**
+  - `event`: The taxonomy event name (e.g. `prompt_purchase_completed`).
+- **Ownership:** Backend / Product Team
+- **Type:** Counter
+- **Note:** See [`docs/analytics-events.md`](../analytics-events.md) for the full event taxonomy.
+
+### 8. `analytics_event_rejected_total`
+- **Description:** Analytics events rejected at the API boundary (unknown event, invalid payload, or a payload smuggling a raw wallet address).
+- **Unit:** Count
+- **Labels:**
+  - `reason`: One of `unknown_event`, `invalid_payload`, `raw_wallet_address`.
+- **Ownership:** Backend / Security Team
+- **Type:** Counter
+
+### 9. `rpc_call_duration_ms`
+- **Description:** Round-trip latency of Soroban RPC methods (`getAccount`, `simulateTransaction`, `sendTransaction`, `pollTransaction`, `getHealth`).
+- **Unit:** Milliseconds (ms)
+- **Labels:**
+  - `method`: RPC method name.
+  - `status`: `ok` or `error`.
+- **Ownership:** Backend / Platform Team
+- **Type:** Histogram / gauge
+- **Alert:** P99 > 2000 ms for 5 minutes pages PagerDuty.
+
+### 10. `rpc_call_error_total`
+- **Description:** Failed RPC calls.
+- **Unit:** Count
+- **Labels:**
+  - `method`: RPC method name.
+- **Ownership:** Backend / Platform Team
+- **Type:** Counter
+
+### 11. `active_users_total`
+- **Description:** Privacy-safe active-user heartbeats from analytics (`wallet_connected`, `prompt_viewed`).
+- **Unit:** Count
+- **Labels:**
+  - `surface`: Event name that produced the heartbeat.
+- **Ownership:** Product / Platform Team
+- **Type:** Counter
+
+### 12. `transaction_volume_total`
+- **Description:** Submitted or completed marketplace transactions.
+- **Unit:** Count
+- **Labels:**
+  - `kind`: `submit` (RPC send) or `purchase` (analytics).
+- **Ownership:** Backend / Product Team
+- **Type:** Counter
+
+### 13. `api_endpoint_health`
+- **Description:** 1 when an endpoint or dependency is healthy, 0 otherwise.
+- **Unit:** Gauge
+- **Labels:**
+  - `path`: Endpoint or dependency name.
+  - `latencyMs`: Last observed latency.
+- **Ownership:** Backend Team
+- **Type:** Gauge
+- **Alert:** Gauge `< 1` for 2 minutes pages PagerDuty.
+
 ## Usage
 These metrics are structured to be parsed and aggregated by Prometheus/Datadog. Ensure that any newly added metrics follow the same convention.
+
+Dashboards and PagerDuty routing: [`docs/operations/monitoring.md`](./monitoring.md).
+Automated deploy rollback: [`docs/operations/auto-rollback.md`](./auto-rollback.md).

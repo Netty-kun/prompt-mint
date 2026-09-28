@@ -1,0 +1,54 @@
+name: Feature Request
+description: Suggest an idea for Prompt Mint
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a feature! Please provide enough details to help us understand your idea.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Is your feature related to a problem?
+      description: Describe the problem or use case you're trying to solve.
+      placeholder: "I'm trying to... but currently..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Describe the solution you'd like
+      description: Provide a clear description of how you would like the feature to work.
+      placeholder: "The feature should allow users to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative approaches
+      description: Have you considered any alternative solutions or features?
+      placeholder: "Other approaches could include..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add any screenshots, mockups, or other context that might help clarify your request.
+      placeholder: "Examples, references, or related issues..."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I have read the [Contributing Guidelines](https://github.com/PromptMintLabs/prompt-mint/blob/main/CONTRIBUTING.md)
+          required: true
+        - label: I have searched for similar feature requests
+          required: true

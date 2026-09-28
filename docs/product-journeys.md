@@ -51,6 +51,23 @@ The creator fills in the listing form at `/sell`:
 
 A listing quality checklist runs before submission to catch weak or missing metadata. Required fields block submission; recommended improvements show as non-blocking warnings.
 
+#### Unsaved changes guard
+
+When the creator modifies the form, the app marks the session as **dirty**. Two guards protect the draft from accidental loss:
+
+1. **Browser `beforeunload`** — triggered when the tab is closed, the page is refreshed, or the user navigates to a different site.
+2. **In-page navigation guard** — triggered when switching from the **Create listing** tab to **My prompts** inside `/sell`.
+
+The guard is **not** shown while the blockchain submission is in flight (`isSubmitting = true`), and it is **cleared immediately** after a successful publish because the form and local draft are reset to the empty state.
+
+Edge cases:
+- **Empty form** — no guard is shown.
+- **Form restored from draft** — the guard is active because the restored data differs from the empty default.
+- **Cancel in-page navigation** — the view stays on **Create listing**.
+- **Confirm in-page navigation** — the creator accepts the risk and switches to **My prompts**. The local draft remains intact.
+
+**Hook:** `src/hooks/useBeforeUnloadWarning.ts`
+
 ### Step 3 — Browser-side encryption
 
 When the creator clicks "Create prompt listing", the browser:
@@ -246,6 +263,7 @@ Expired challenge tokens surface as `400` with an `expired` message. The fronten
 | `src/pages/browse/FetchAllPrompts.tsx` | Reads all prompts from contract |
 | `src/pages/browse/PromptModal.tsx` | Purchase and unlock UI |
 | `src/pages/sell/MyPrompts.tsx` | Creator dashboard |
+| `src/hooks/useBeforeUnloadWarning.ts` | Registers `beforeunload` listener for dirty forms |
 | `api/auth/challenge.ts` | Challenge token issuance |
 | `api/prompts/unlock.ts` | Prompt unlock and decryption |
 | `src/lib/crypto/promptCrypto.ts` | AES-GCM encryption helpers |

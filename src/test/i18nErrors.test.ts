@@ -21,6 +21,24 @@ describe("i18n Error Localization", () => {
       expect(i18n.t("errors.validation.review_text_short")).toBe(
         "Review text must be at least 10 characters."
       );
+      expect(i18n.t("errors.validation.title_required")).toBe(
+        "Title is required."
+      );
+      expect(i18n.t("errors.validation.title_min_length")).toBe(
+        "Title must be at least 3 characters."
+      );
+      expect(i18n.t("errors.validation.price_must_be_positive")).toBe(
+        "Price must be greater than 0."
+      );
+      expect(i18n.t("errors.validation.price_required")).toBe(
+        "Price is required."
+      );
+      expect(i18n.t("errors.validation.image_url_invalid")).toBe(
+        "Image URL must start with http:// or https://."
+      );
+      expect(i18n.t("errors.validation.image_url_required")).toBe(
+        "Image URL is required."
+      );
     });
 
     it("has transaction error keys in English", () => {
@@ -28,19 +46,19 @@ describe("i18n Error Localization", () => {
         "Transaction was rejected by the user."
       );
       expect(i18n.t("errors.transaction.insufficient_funds")).toBe(
-        "Insufficient funds to complete this transaction."
+        "Insufficient funds to complete this transaction. Add more funds to your wallet and try again."
       );
       expect(i18n.t("errors.transaction.insufficient_gas")).toBe(
-        "Insufficient gas to complete this transaction."
+        "Insufficient gas to complete this transaction. Top up your wallet's XLM balance to cover network fees, then try again."
       );
       expect(i18n.t("errors.transaction.invalid_signature")).toBe(
-        "Transaction signature is invalid."
+        "Transaction signature is invalid. Reconnect your wallet and try signing the transaction again."
       );
       expect(i18n.t("errors.transaction.network_error")).toBe(
-        "Network error. Please try again."
+        "Network error. Please check your internet connection and try again."
       );
       expect(i18n.t("errors.transaction.unknown")).toBe(
-        "An unexpected error occurred. Please try again."
+        "An unexpected error occurred. Please try again. If this keeps happening, please contact support with the time this occurred."
       );
     });
 
@@ -49,7 +67,7 @@ describe("i18n Error Localization", () => {
         "Please connect your wallet first."
       );
       expect(i18n.t("errors.wallet.network_mismatch")).toBe(
-        "Wrong network configured in your wallet."
+        "Your wallet is connected to the wrong network. Switch your wallet to the correct network and try again."
       );
     });
 
@@ -74,16 +92,16 @@ describe("i18n Error Localization", () => {
         "Transaction was rejected by the user."
       );
       expect(translateError("Insufficient funds")).toBe(
-        "Insufficient funds to complete this transaction."
+        "Insufficient funds to complete this transaction. Add more funds to your wallet and try again."
       );
       expect(translateError("op_underfunded")).toBe(
-        "Insufficient funds to complete this transaction."
+        "Insufficient funds to complete this transaction. Add more funds to your wallet and try again."
       );
       expect(translateError("Network error occurred")).toBe(
-        "Network error. Please try again."
+        "Network error. Please check your internet connection and try again."
       );
       expect(translateError("invalid signature provided")).toBe(
-        "Transaction signature is invalid."
+        "Transaction signature is invalid. Reconnect your wallet and try signing the transaction again."
       );
     });
 
@@ -91,7 +109,7 @@ describe("i18n Error Localization", () => {
       const { translateError } = await import("../lib/i18n-errors");
 
       expect(translateError("some random error")).toBe(
-        "An unexpected error occurred. Please try again."
+        "An unexpected error occurred. Please try again. If this keeps happening, please contact support with the time this occurred."
       );
     });
   });
@@ -130,10 +148,13 @@ describe("i18n Error Localization", () => {
 
       i18n.changeLanguage("zh");
       expect(i18n.t("errors.validation.required")).toBe("此字段为必填项。");
+
+      i18n.changeLanguage("ja");
+      expect(i18n.t("errors.validation.required")).toBe("この項目は必須です。");
     });
 
     it("all locales have all required keys", () => {
-      const locales = ["en", "es", "fr", "zh"];
+      const locales = ["en", "es", "fr", "zh", "ja"];
       const requiredKeys = [
         "errors.validation.required",
         "errors.validation.min_length",

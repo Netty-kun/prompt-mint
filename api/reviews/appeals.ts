@@ -110,8 +110,8 @@ export default async function handler(req: any, res: any) {
     res.status(404).json({ error: "Review not found or not eligible for appeal" });
     return;
   }
-  if (review.moderationDecision?.status !== "edited" && review.moderationDecision?.status !== "removed") {
-    res.status(409).json({ error: "Only moderated reviews can be appealed" });
+  if (review.moderation?.status !== "removed") {
+    res.status(409).json({ error: "Only removed reviews can be appealed" });
     return;
   }
 
@@ -155,13 +155,27 @@ export default async function handler(req: any, res: any) {
 
     const appealId = randomUUID();
     const submittedAt = new Date();
+    const evidenceRefs = attachments.map((attachment: { name: string }) => ({
+      label: attachment.name,
+      redactedRef: "supporting-file",
+    }));
     await Appeal.create({
       appealId,
+      decisionId: null,
       reviewId: normalizedReviewId,
       appellantAddress: normalizedAddress.toLowerCase(),
-      reason: normalizedReason,
-      status: "submitted",
+      statement: normalizedReason,
+      status: "open",
+      evidenceRefs,
       attachments,
+      history: [{
+        fromStatus: null,
+        toStatus: "open",
+        actor: normalizedAddress.toLowerCase(),
+        timestamp: submittedAt,
+        reason: normalizedReason,
+        evidenceRefs,
+      }],
     });
 
     res.status(201).json({

@@ -4,12 +4,23 @@ import { useWallet } from "../hooks/useWallet";
 import { shortenAddress } from "@/lib/utils";
 import { Button as ShadcnButton } from "./ui/button";
 import { Loader2, AlertCircle, X } from "lucide-react";
+import { getSupportedWallets } from "@/util/wallet";
+import { trackEvent } from "@/lib/analytics/track";
+
+const KNOWN_WALLETS: { id: string; name: string }[] = [
+  { id: "freighter", name: "Freighter" },
+  { id: "albedo", name: "Albedo" },
+  { id: "xbull", name: "xBull" },
+];
 
 export const WalletButton = () => {
   const [showModal, setShowModal] = useState(false);
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
-  const { address, status, error, connect, disconnect } = useWallet();
+  const { address, status, error, connect, disconnect, reconnect } = useWallet();
   const [dismissedError, setDismissedError] = useState<string | null>(null);
+  const [checkingWallets, setCheckingWallets] = useState(false);
+  const [availableWallets, setAvailableWallets] = useState<typeof KNOWN_WALLETS>(KNOWN_WALLETS);
+  const [noWalletDetected, setNoWalletDetected] = useState(false);
 
   useEffect(() => {
     if (status !== "error") setDismissedError(null);
@@ -18,6 +29,35 @@ export const WalletButton = () => {
   const handleConnect = async (id: string) => {
     setShowModal(false);
     await connect(id);
+  };
+
+  const handleOpenModal = async () => {
+    setNoWalletDetected(false);
+    setCheckingWallets(true);
+    try {
+      const supported = await getSupportedWallets();
+      const availableIds = new Set(
+        supported.filter((w) => w.isAvailable).map((w) => w.id),
+      );
+      const available = KNOWN_WALLETS.filter((w) => availableIds.has(w.id));
+
+      if (available.length === 0) {
+        setNoWalletDetected(true);
+        trackEvent("wallet_connect_failed", { reasonCode: "no_supported_wallet" });
+        return;
+      }
+
+      setAvailableWallets(available);
+      setShowModal(true);
+    } catch (e) {
+      // If detection itself fails, don't block connecting altogether -
+      // fall back to showing every known wallet option.
+      console.warn("Unable to detect supported wallets, showing all options.", e);
+      setAvailableWallets(KNOWN_WALLETS);
+      setShowModal(true);
+    } finally {
+      setCheckingWallets(false);
+    }
   };
 
   const handleDisconnect = () => {
@@ -37,13 +77,31 @@ export const WalletButton = () => {
         </div>
       )}
 
+      {noWalletDetected && (
+        <div className="absolute bottom-full right-0 mb-2 w-max max-w-xs bg-red-500 text-white text-xs pl-3 pr-2 py-2 rounded shadow-lg whitespace-normal z-50 flex items-start gap-1">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span className="flex-1">No supported wallet extension detected. Install Freighter, Albedo, or xBull to continue.</span>
+          <button onClick={() => setNoWalletDetected(false)} className="opacity-80 hover:opacity-100 transition-opacity ml-1 p-0.5" aria-label="Dismiss error">
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
       {(status === "idle" || status === "error") && (
         <ShadcnButton
           variant={"default"} size={"sm"}
           className="ml-auto font-bold border-purple-900 text-white hover:text-purple-300 hover:border-purple-800 min-w-[120px]"
-          onClick={() => setShowModal(true)}
+          onClick={() => void handleOpenModal()}
+          disabled={checkingWallets}
         >
-          Connect Wallet
+          {checkingWallets ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin shrink-0" />
+              Checking Wallets...
+            </>
+          ) : (
+            "Connect Wallet"
+          )}
         </ShadcnButton>
       )}
 
@@ -63,6 +121,16 @@ export const WalletButton = () => {
           <Loader2 className="h-4 w-4 animate-spin shrink-0" />
           <span>Restoring Session...</span>
         </div>
+      )}
+
+      {status === "disconnected" && (
+        <ShadcnButton
+          variant={"outline"} size={"sm"}
+          className="ml-auto font-bold border-orange-600 text-orange-400 hover:text-orange-300 hover:border-orange-500 min-w-[120px]"
+          onClick={() => void reconnect()}
+        >
+          Reconnect
+        </ShadcnButton>
       )}
 
       {status === "connected" && address && (
@@ -90,15 +158,16 @@ export const WalletButton = () => {
           <div className="bg-slate-900 border border-white/10 rounded-lg p-6 shadow-xl max-w-sm w-full mx-4">
             <h3 className="text-lg font-bold mb-4 text-white">Select a Wallet</h3>
             <div className="flex flex-col space-y-3">
-              <ShadcnButton variant="outline" onClick={() => void handleConnect("freighter")} className="w-full justify-start border-white/10 text-white hover:bg-white/10 hover:text-white">
-                Freighter
-              </ShadcnButton>
-              <ShadcnButton variant="outline" onClick={() => void handleConnect("albedo")} className="w-full justify-start border-white/10 text-white hover:bg-white/10 hover:text-white">
-                Albedo
-              </ShadcnButton>
-              <ShadcnButton variant="outline" onClick={() => void handleConnect("xbull")} className="w-full justify-start border-white/10 text-white hover:bg-white/10 hover:text-white">
-                xBull
-              </ShadcnButton>
+              {availableWallets.map((w) => (
+                <ShadcnButton
+                  key={w.id}
+                  variant="outline"
+                  onClick={() => void handleConnect(w.id)}
+                  className="w-full justify-start border-white/10 text-white hover:bg-white/10 hover:text-white"
+                >
+                  {w.name}
+                </ShadcnButton>
+              ))}
             </div>
             <ShadcnButton variant="ghost" onClick={() => setShowModal(false)} className="mt-6 w-full text-slate-400 hover:text-white hover:bg-white/5">
               Cancel

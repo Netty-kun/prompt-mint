@@ -96,6 +96,20 @@ export function normalizeContentHash(hash: string | Uint8Array): string {
   return trimmed.toLowerCase();
 }
 
+// AES-GCM's default tag length (Web Crypto uses 128 bits unless overridden)
+// appends a fixed 16-byte authentication tag to the ciphertext, and the
+// result is then base64-encoded before being sent on-chain. Both steps are
+// deterministic given only the plaintext's byte length, so the final
+// on-chain payload size can be computed without performing any actual
+// encryption — used to give real-time size feedback while the user is still
+// typing, before an encryption pass (and its random key/IV) ever runs.
+const AES_GCM_TAG_BYTES = 16;
+
+export function estimateEncryptedPayloadSize(plaintext: string): number {
+  const ciphertextBytes = encoder.encode(plaintext).length + AES_GCM_TAG_BYTES;
+  return Math.ceil(ciphertextBytes / 3) * 4;
+}
+
 export async function encryptPromptPlaintext(
   plaintext: string,
   rawKey?: Uint8Array,

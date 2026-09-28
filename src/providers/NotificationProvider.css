@@ -16,6 +16,15 @@
   opacity: 1;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .notification {
+    transition: none !important;
+  }
+  .notification.slide-in {
+    transform: translateY(0);
+  }
+}
+
 .notification.slide-in {
   transform: translateY(0);
 }

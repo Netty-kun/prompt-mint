@@ -1,7 +1,8 @@
-import { 
-  StellarWalletsKit, 
-  WalletNetwork, 
-  allowAllModules 
+import {
+  StellarWalletsKit,
+  WalletNetwork,
+  allowAllModules,
+  type ISupportedWallet,
 } from "@creit.tech/stellar-wallets-kit";
 import { Horizon } from "@stellar/stellar-sdk";
 import { horizonUrl, stellarNetwork, stellarWalletNetwork } from "../lib/env";
@@ -47,4 +48,13 @@ export const wallet = kit;
 // Restore removed connectWallet export for backward compatibility
 export const connectWallet = async (...args: any[]) => {
   return (kit as any).openModal(...args);
+};
+
+/**
+ * Reports which wallets the kit can actually detect in the current browser
+ * (extension installed, in-app browser wrapper, etc.). Used to avoid opening
+ * the connection modal for wallets that aren't usable.
+ */
+export const getSupportedWallets = (): Promise<ISupportedWallet[]> => {
+  return kit.getSupportedWallets();
 };

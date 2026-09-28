@@ -127,15 +127,18 @@ describe("Review appeal API", () => {
       "wallet-signature"
     );
     expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+      decisionId: null,
       reviewId: "review_2",
       appellantAddress: appellantAddress.toLowerCase(),
-      status: "submitted",
+      statement: "The review was removed in error and I can provide more context.",
+      status: "open",
       attachments: [{
         name: "evidence.pdf",
         contentType: "application/pdf",
         size: pdfData.length,
         data: pdfData,
       }],
+      history: [expect.objectContaining({ toStatus: "open", actor: appellantAddress.toLowerCase() })],
     }));
     expect(response.statusCode).toBe(201);
     expect(response.body).toMatchObject({ reviewId: "review_2", status: "submitted" });

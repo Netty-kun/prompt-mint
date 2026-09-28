@@ -35,7 +35,8 @@ const DECISION_DETAILS = {
 
 export function ReviewModerationBanner({ decision, reviewId }: ReviewModerationBannerProps) {
   const { label, Icon, className, iconClassName } = DECISION_DETAILS[decision.status];
-  const decidedAt = decision.decidedAt === undefined ? undefined : new Date(decision.decidedAt);
+  const decisionTimestamp = decision.decidedAt ?? decision.updatedAt;
+  const decidedAt = decisionTimestamp === undefined ? undefined : new Date(decisionTimestamp);
   const validDecisionDate = decidedAt && !Number.isNaN(decidedAt.getTime());
 
   return (

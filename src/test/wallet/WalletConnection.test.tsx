@@ -1,11 +1,31 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "../render";
 import { WalletButton } from "@/components/WalletButton";
 import type { WalletContextType } from "@/providers/WalletProvider";
+import { getSupportedWallets } from "@/util/wallet";
+
+vi.mock("@/util/wallet", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/util/wallet")>();
+  return {
+    ...actual,
+    getSupportedWallets: vi.fn(),
+  };
+});
+
+const mockGetSupportedWallets = vi.mocked(getSupportedWallets);
 
 describe("Wallet Connection States", () => {
+  beforeEach(() => {
+    mockGetSupportedWallets.mockReset();
+    mockGetSupportedWallets.mockResolvedValue([
+      { id: "freighter", name: "Freighter", type: "HOT_WALLET", isAvailable: true, isPlatformWrapper: false, icon: "", url: "" },
+      { id: "albedo", name: "Albedo", type: "HOT_WALLET", isAvailable: true, isPlatformWrapper: false, icon: "", url: "" },
+      { id: "xbull", name: "xBull", type: "HOT_WALLET", isAvailable: true, isPlatformWrapper: false, icon: "", url: "" },
+    ]);
+  });
+
   it("shows connect button when wallet is disconnected", () => {
     const mockWallet: Partial<WalletContextType> = {
       address: undefined,
@@ -63,7 +83,7 @@ describe("Wallet Connection States", () => {
 
     const connectButton = screen.getByRole("button");
     await user.click(connectButton);
-    await user.click(screen.getByRole("button", { name: "Freighter" }));
+    await user.click(await screen.findByRole("button", { name: "Freighter" }));
 
     await waitFor(() => {
       expect(mockConnect).toHaveBeenCalled();
@@ -90,10 +110,99 @@ describe("Wallet Connection States", () => {
       status: "reconnecting",
       connect: vi.fn(),
       disconnect: vi.fn(),
+      reconnect: vi.fn(),
     };
 
     renderWithProviders(<WalletButton />, { wallet: mockWallet });
 
     expect(screen.getByText(/restoring session/i)).toBeInTheDocument();
+  });
+
+  it("shows disconnected state when wallet is disconnected", () => {
+    const mockWallet: Partial<WalletContextType> = {
+      address: undefined,
+      status: "disconnected",
+      error: "Wallet is locked",
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      reconnect: vi.fn(),
+    };
+
+    renderWithProviders(<WalletButton />, { wallet: mockWallet });
+
+    expect(screen.getByText(/reconnect/i)).toBeInTheDocument();
+  });
+
+  it("only lists wallets the kit reports as available", async () => {
+    mockGetSupportedWallets.mockResolvedValue([
+      { id: "freighter", name: "Freighter", type: "HOT_WALLET", isAvailable: true, isPlatformWrapper: false, icon: "", url: "" },
+      { id: "albedo", name: "Albedo", type: "HOT_WALLET", isAvailable: false, isPlatformWrapper: false, icon: "", url: "" },
+      { id: "xbull", name: "xBull", type: "HOT_WALLET", isAvailable: false, isPlatformWrapper: false, icon: "", url: "" },
+    ]);
+
+    const user = userEvent.setup();
+    const mockWallet: Partial<WalletContextType> = {
+      address: undefined,
+      status: "idle",
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    };
+
+    renderWithProviders(<WalletButton />, { wallet: mockWallet });
+
+    await user.click(screen.getByRole("button", { name: /connect wallet/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Freighter" })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: "Albedo" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "xBull" })).not.toBeInTheDocument();
+  });
+
+  it("blocks the modal and warns when no supported wallet is detected", async () => {
+    mockGetSupportedWallets.mockResolvedValue([
+      { id: "freighter", name: "Freighter", type: "HOT_WALLET", isAvailable: false, isPlatformWrapper: false, icon: "", url: "" },
+      { id: "albedo", name: "Albedo", type: "HOT_WALLET", isAvailable: false, isPlatformWrapper: false, icon: "", url: "" },
+      { id: "xbull", name: "xBull", type: "HOT_WALLET", isAvailable: false, isPlatformWrapper: false, icon: "", url: "" },
+    ]);
+
+    const user = userEvent.setup();
+    const mockWallet: Partial<WalletContextType> = {
+      address: undefined,
+      status: "idle",
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    };
+
+    renderWithProviders(<WalletButton />, { wallet: mockWallet });
+
+    await user.click(screen.getByRole("button", { name: /connect wallet/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/no supported wallet extension detected/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Select a Wallet")).not.toBeInTheDocument();
+  });
+
+  it("falls back to showing all wallet options if detection fails", async () => {
+    mockGetSupportedWallets.mockRejectedValue(new Error("detection unavailable"));
+
+    const user = userEvent.setup();
+    const mockWallet: Partial<WalletContextType> = {
+      address: undefined,
+      status: "idle",
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    };
+
+    renderWithProviders(<WalletButton />, { wallet: mockWallet });
+
+    await user.click(screen.getByRole("button", { name: /connect wallet/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Freighter" })).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "Albedo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "xBull" })).toBeInTheDocument();
   });
 });

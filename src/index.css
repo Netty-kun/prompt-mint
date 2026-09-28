@@ -72,5 +72,48 @@
   body {
     background: hsl(var(--background));
     color: hsl(var(--foreground));
+    transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
+  }
+
+  /* #270 – Ensure a visible keyboard focus indicator everywhere. This is a
+     global :focus-visible ring (not applied to mouse clicks) so custom
+     interactive elements without their own focus style remain operable by
+     keyboard users. No `outline-none` overrides exist in the codebase to undo. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-area-inset {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@media screen and (max-width: 639px) {
+  #root > div > div:last-child {
+    padding-bottom: 4rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-marquee,
+  .animate-marquee-reverse {
+    animation: none !important;
+  }
+
+  .notification {
+    transition: none !important;
   }
 }

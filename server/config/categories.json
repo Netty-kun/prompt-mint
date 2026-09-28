@@ -1,0 +1,40 @@
+{
+  "categories": [
+    {
+      "id": "marketing",
+      "name": "Marketing",
+      "description": "Prompts for marketing, advertising, and promotional content",
+      "aliases": ["marketing", "advertisement", "promo"]
+    },
+    {
+      "id": "creative-writing",
+      "name": "Creative Writing",
+      "description": "Prompts for creative writing, storytelling, and fiction",
+      "aliases": ["creative writing", "creative", "writing", "story"]
+    },
+    {
+      "id": "programming",
+      "name": "Programming",
+      "description": "Prompts for code generation, debugging, and technical documentation",
+      "aliases": ["programming", "coding", "development", "software"]
+    },
+    {
+      "id": "music",
+      "name": "Music",
+      "description": "Prompts for music composition, lyrics, and audio content",
+      "aliases": ["music", "audio", "sound"]
+    },
+    {
+      "id": "gaming",
+      "name": "Gaming",
+      "description": "Prompts for game design, gaming content, and interactive experiences",
+      "aliases": ["gaming", "game", "games"]
+    },
+    {
+      "id": "other",
+      "name": "Other",
+      "description": "Miscellaneous prompts that don't fit other categories",
+      "aliases": ["other", "misc", "miscellaneous"]
+    }
+  ]
+}

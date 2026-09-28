@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { StarRating } from "./StarRating";
-import { User, ThumbsUp, MessageSquare } from "lucide-react";
+import { User, ThumbsUp, MessageSquare, Pencil } from "lucide-react";
 import { ReviewClient, type Review } from "../../lib/reviews/reviewClient";
 import { Button } from "../ui/button";
+import { SkeletonAvatar, SkeletonText } from "../Skeleton";
 import { ReviewModerationBanner } from "./ReviewModerationBanner";
 
 const formatDistanceToNow = (date: Date, options?: { addSuffix?: boolean }) => {
@@ -60,6 +61,10 @@ export const ReviewList = ({
   const [respondToReviewId, setRespondToReviewId] = useState<string | null>(null);
   const [responseText, setResponseText] = useState("");
   const [responseLoading, setResponseLoading] = useState(false);
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [editRating, setEditRating] = useState(0);
+  const [editLoading, setEditLoading] = useState(false);
 
   const handleVote = async (reviewId: string) => {
     if (!currentUserAddress || !promptId) return;
@@ -94,17 +99,30 @@ export const ReviewList = ({
     }
   };
 
+  const handleEdit = async (reviewId: string) => {
+    if (!currentUserAddress || !promptId) return;
+    setEditLoading(true); setVoteError(null);
+    try {
+      await ReviewClient.editReview(promptId, reviewId, currentUserAddress, editRating, editText.trim());
+      setEditingReviewId(null); setEditText(""); onReviewUpdate?.();
+    } catch (err) {
+      setVoteError(err instanceof Error ? err.message : "Failed to edit review");
+    } finally { setEditLoading(false); }
+  };
+
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4" role="status" aria-label="Loading reviews">
         {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="p-4 rounded-2xl bg-white/5 border border-white/5 animate-pulse"
-          >
-            <div className="h-4 w-32 bg-white/10 rounded mb-3" />
-            <div className="h-3 w-full bg-white/10 rounded mb-2" />
-            <div className="h-3 w-2/3 bg-white/10 rounded" />
+          <div key={i} className="p-5 rounded-2xl bg-white/[0.02] border border-white/5">
+            <div className="flex items-center gap-3 mb-3">
+              <SkeletonAvatar size={40} />
+              <div className="flex-1 space-y-1.5">
+                <SkeletonText className="w-32" />
+                <SkeletonText className="w-20" />
+              </div>
+            </div>
+            <SkeletonText lines={2} />
           </div>
         ))}
       </div>
@@ -135,12 +153,9 @@ export const ReviewList = ({
           {voteError}
         </div>
       )}
-      {reviews.map((review) => review.moderationDecision?.status === "removed" ? (
-        <div
-          key={review.id}
-          className="rounded-xl border border-amber-300/20 bg-amber-300/[0.03] p-4"
-        >
-          <ReviewModerationBanner decision={review.moderationDecision} reviewId={review.id} />
+      {reviews.map((review) => review.moderation?.status === "removed" ? (
+        <div key={review.id} className="rounded-xl border border-amber-300/20 bg-amber-300/[0.03] p-4">
+          <ReviewModerationBanner decision={review.moderation} reviewId={review.id} />
         </div>
       ) : (
         <div
@@ -167,14 +182,15 @@ export const ReviewList = ({
                 </div>
                 <span className="text-xs text-slate-500">
                   {formatDate(review.createdAt)}
+                  {review.editedAt ? " (edited)" : ""}
                 </span>
               </div>
             </div>
             <StarRating rating={review.rating} readonly size="sm" />
           </div>
 
-          {review.moderationDecision && (
-            <ReviewModerationBanner decision={review.moderationDecision} reviewId={review.id} />
+          {review.moderation && (
+            <ReviewModerationBanner decision={review.moderation} reviewId={review.id} />
           )}
 
           <p className="text-sm text-slate-300 leading-relaxed mb-3">
@@ -210,6 +226,20 @@ export const ReviewList = ({
               </span>
             )}
           </div>
+
+          {currentUserAddress?.toLowerCase() === review.userAddress.toLowerCase() && promptId && editingReviewId !== review.id && (
+            <button onClick={() => { setEditingReviewId(review.id); setEditText(review.text); setEditRating(review.rating); }} className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-emerald-400">
+              <Pencil className="h-3.5 w-3.5" /> Edit review
+            </button>
+          )}
+
+          {editingReviewId === review.id && (
+            <div className="mt-4 space-y-3">
+              <StarRating rating={editRating} onRatingChange={setEditRating} size="sm" />
+              <textarea value={editText} onChange={(e) => setEditText(e.target.value)} maxLength={500} className="w-full min-h-[100px] p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm resize-none" aria-label="Edit review" />
+              <div className="flex gap-2"><Button size="sm" onClick={() => handleEdit(review.id)} disabled={editLoading || editRating < 1 || editText.trim().length < 10} className="bg-emerald-500 text-slate-950">{editLoading ? "Saving..." : "Save changes"}</Button><Button size="sm" variant="ghost" onClick={() => setEditingReviewId(null)}>Cancel</Button></div>
+            </div>
+          )}
 
           {review.sellerResponse && (
             <div className="mt-4 ml-6 p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10">

@@ -2,16 +2,21 @@ import {
   ArrowUpRight,
   Bookmark,
   BookmarkCheck,
+  Heart,
   LockKeyhole,
   ShieldCheck,
   TrendingUp,
+  AlertTriangle,
+  Info,
+  GitCompare,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { shortenAddress } from "@/lib/utils";
-import { formatPriceLabel } from "@/lib/stellar/format";
+import { formatPriceLabel, stroopsToXlmString } from "@/lib/stellar/format";
 import { CurrencyPrice } from "@/components/CurrencyPrice";
+import { useComparison } from "@/hooks/useComparison";
 import type { PromptRecord } from "@/lib/stellar/promptHashClient";
 import { StarRating } from "@/components/prompts/StarRating";
 import { useQuery } from "@tanstack/react-query";
@@ -25,17 +30,25 @@ export const PromptCard = ({
   isSaved,
   isSaving,
   onToggleSave,
+  isFavorited,
+  onToggleFavorite,
 }: {
   prompt: PromptRecord;
   hasAccess: boolean;
-  // eslint-disable-next-line no-unused-vars
   openModal: (_prompt: PromptRecord) => void;
   isSaved: boolean;
   isSaving: boolean;
-  // eslint-disable-next-line no-unused-vars
   onToggleSave: (_prompt: PromptRecord) => void;
+  isFavorited?: boolean;
+  onToggleFavorite?: (_prompt: PromptRecord) => void;
 }) => {
   const isBestSeller = prompt.salesCount >= 10;
+
+  // #277 – comparison selection (persisted via localStorage)
+  const comparison = useComparison();
+  const promptIdStr = prompt.id.toString();
+  const inComparison = comparison.isSelected(promptIdStr);
+  const compareDisabled = !inComparison && !comparison.canAdd;
 
   // Fetch review stats for this prompt
   const { data: reviewStats } = useQuery({
@@ -67,17 +80,91 @@ export const PromptCard = ({
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-transparent to-transparent opacity-60" />
 
-        <div className="absolute top-4 left-4 flex gap-2">
+        <div className="absolute top-4 left-4 flex gap-2 flex-wrap">
           <Badge className="bg-slate-950/80 backdrop-blur-md border-white/10 text-slate-200 hover:bg-slate-900">
             {prompt.category}
           </Badge>
+          {prompt.classification && prompt.classification !== "general" && (
+            <Badge
+              className={`backdrop-blur-md border text-xs ${
+                prompt.classification === "restricted"
+                  ? "bg-rose-950/80 border-rose-500/30 text-rose-300"
+                  : prompt.classification === "sensitive"
+                    ? "bg-amber-950/80 border-amber-500/30 text-amber-300"
+                    : "bg-slate-950/80 border-white/10 text-slate-200"
+              }`}
+            >
+              {prompt.classification === "sensitive" || prompt.classification === "restricted" ? (
+                <AlertTriangle className="h-3 w-3 mr-1" />
+              ) : (
+                <Info className="h-3 w-3 mr-1" />
+              )}
+              {prompt.classification.charAt(0).toUpperCase() + prompt.classification.slice(1)}
+            </Badge>
+          )}
           {isBestSeller && (
             <Badge className="bg-emerald-500 text-slate-950 border-none font-bold">
               <TrendingUp className="h-3 w-3 mr-1" /> Best Seller
             </Badge>
           )}
         </div>
-        <div className="absolute top-4 right-4">
+        <div className="absolute top-4 right-4 flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            className={`h-8 rounded-full border px-3 text-xs shadow-lg backdrop-blur-md ${
+              inComparison
+                ? "border-emerald-500/40 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30"
+                : "border-white/10 bg-slate-950/75 text-white hover:bg-slate-900"
+            }`}
+            disabled={compareDisabled}
+            aria-pressed={inComparison}
+            aria-label={
+              inComparison
+                ? `Remove ${prompt.title} from comparison`
+                : `Add ${prompt.title} to comparison`
+            }
+            title={
+              compareDisabled
+                ? "You can compare up to 4 prompts"
+                : inComparison
+                  ? "Remove from comparison"
+                  : "Add to comparison"
+            }
+            onClick={(event) => {
+              event.stopPropagation();
+              comparison.toggle({
+                id: promptIdStr,
+                title: prompt.title,
+                creator: prompt.creator,
+                price: Number(stroopsToXlmString(prompt.priceStroops)),
+                category: prompt.category,
+                tags: prompt.tags,
+                salesCount: prompt.salesCount,
+                preview: prompt.previewText,
+                isOwned: hasAccess,
+              });
+            }}
+          >
+            <GitCompare className="mr-1.5 h-3.5 w-3.5" />
+            {inComparison ? "Comparing" : "Compare"}
+          </Button>
+          {onToggleFavorite && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-8 rounded-full border border-white/10 bg-slate-950/75 px-3 text-xs text-white shadow-lg backdrop-blur-md hover:bg-slate-900"
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleFavorite(prompt);
+              }}
+              aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Heart
+                className={`mr-1.5 h-3.5 w-3.5 ${isFavorited ? "fill-rose-400 text-rose-400" : ""}`}
+              />
+            </Button>
+          )}
           <Button
             size="sm"
             variant="secondary"
@@ -146,6 +233,22 @@ export const PromptCard = ({
               <ShieldCheck className="h-3 w-3 text-amber-400" />
               Verified
             </span>
+          )}
+
+          {/* #131 – Safety Disclosure Flags */}
+          {prompt.safetyFlags && prompt.safetyFlags.length > 0 && !prompt.safetyFlags.includes("none") && (
+            <>
+              {prompt.safetyFlags.map((flag) => (
+                <span
+                  key={flag}
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
+                  data-testid={`badge-safety-${flag}`}
+                >
+                  <ShieldCheck className="h-3 w-3 text-cyan-400" />
+                  {flag.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}
+                </span>
+              ))}
+            </>
           )}
         </div>
 

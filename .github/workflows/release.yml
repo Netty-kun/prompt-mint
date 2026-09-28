@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      skipPublish:
+        description: "Skip npm publish (publish to GitHub Releases only)"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create Release Pull Request or Publish
+        id: changesets
+        uses: changesets/action@v2
+        with:
+          publish: npm run release
+          version: npm run version-packages
+          commit: "chore(release): version packages"
+          title: "chore(release): version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to GitHub Releases
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Parse version and changelog from package.json
+          VERSION=$(node -p "require('./package.json').version")
+          CHANGELOG_ENTRY=$(node -p "require('fs').readFileSync('./CHANGELOG.md', 'utf8').split('\\n\\n')[1]")
+
+          # Create GitHub Release
+          gh release create "v${VERSION}" \
+            --title "Release v${VERSION}" \
+            --notes "${CHANGELOG_ENTRY}" \
+            --target main
+
+      - name: Comment on Release PR
+        if: steps.changesets.outputs.hasChangesets == 'true'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ This PR updates the changelog and version number. Merge to publish a new release.',
+            })

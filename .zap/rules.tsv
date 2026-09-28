@@ -1,0 +1,24 @@
+# OWASP ZAP alert overrides for the CI DAST target.
+# Format: <plugin-id><tab><action><tab><comment>
+# Actions: IGNORE | FAIL | WARN | INFO
+#
+# Only informational / environment-specific noise is ignored. Injection,
+# auth-bypass, and other High/Critical classes still fail the job (-l FAIL).
+
+10098	IGNORE	(CSP) CI target already sends a CSP; some ZAP versions still warn.
+10055	IGNORE	(CSP sandbox directive) Same as above.
+10021	IGNORE	(X-Content-Type-Options) Already set on the DAST target.
+10020	IGNORE	(X-Frame-Options) Already set on the DAST target.
+10016	IGNORE	(X-XSS-Protection) Already set on the DAST target.
+10035	IGNORE	(HSTS) TLS is terminated at the edge, not on http://localhost.
+10038	IGNORE	(Content Security Policy) Already set on the DAST target.
+10063	IGNORE	(Permissions Policy) Already set on the DAST target.
+2	IGNORE	(Private IP disclosure) Expected for a localhost DAST target.
+10096	IGNORE	(Timestamp disclosure) /health includes an indexer timestamp by spec.
+10109	IGNORE	(Modern web application) Informational only.
+10112	IGNORE	(Session Management Response Identified) Informational only.
+10037	IGNORE	(Server header version leak) Node default; stripped in production.
+10041	IGNORE	(HTTP to HTTPS) Local DAST target is HTTP by design.
+15	IGNORE	(Re-examine Cache-control) Public GET catalog routes may be cached.
+10049	IGNORE	(Storable/cacheable content) Public GET catalog routes may be cached.
+10202	IGNORE	(Absence of Anti-CSRF Tokens) API uses wallet signatures / API keys.

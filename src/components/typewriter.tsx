@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import { useReducedMotion } from "@/components/ReducedMotionProvider";
 
 interface TypewriterProps {
   text: string;
@@ -14,45 +15,53 @@ export function Typewriter({
   speed = 30,
   className = "",
 }: TypewriterProps) {
-  const [displayedText, setDisplayedText] = useState("");
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isComplete, setIsComplete] = useState(false);
-  const [showCursor, setShowCursor] = useState(true);
+  const { prefersReducedMotion } = useReducedMotion();
+  const [displayedText, setDisplayedText] = useState(prefersReducedMotion ? text : "");
+  const [currentIndex, setCurrentIndex] = useState(prefersReducedMotion ? text.length : 0);
+  const [isComplete, setIsComplete] = useState(prefersReducedMotion);
+  const [showCursor, setShowCursor] = useState(!prefersReducedMotion);
 
-  // Reset when text changes
   useEffect(() => {
+    if (prefersReducedMotion) {
+      setDisplayedText(text);
+      setCurrentIndex(text.length);
+      setIsComplete(true);
+      setShowCursor(false);
+      return;
+    }
+
     setDisplayedText("");
     setCurrentIndex(0);
     setIsComplete(false);
     setShowCursor(true);
-  }, [text]);
+  }, [text, prefersReducedMotion]);
 
-  // Typing effect
   useEffect(() => {
-    if (currentIndex < text.length) {
-      const timeout = setTimeout(() => {
-        setDisplayedText((prev) => prev + text[currentIndex]);
-        setCurrentIndex((prev) => prev + 1);
-      }, speed);
-
-      return () => clearTimeout(timeout);
-    } else {
-      setIsComplete(true);
-      // Stop blinking cursor after typing is complete
-      setTimeout(() => setShowCursor(false), 1000);
+    if (prefersReducedMotion || currentIndex >= text.length) {
+      if (!prefersReducedMotion) {
+        setIsComplete(true);
+        setTimeout(() => setShowCursor(false), 1000);
+      }
+      return;
     }
-  }, [currentIndex, text, speed]);
 
-  // Blinking cursor effect
+    const timeout = setTimeout(() => {
+      setDisplayedText((prev) => prev + text[currentIndex]);
+      setCurrentIndex((prev) => prev + 1);
+    }, speed);
+
+    return () => clearTimeout(timeout);
+  }, [currentIndex, text, speed, prefersReducedMotion]);
+
   useEffect(() => {
-    if (!isComplete) {
+    if (!isComplete && !prefersReducedMotion) {
       const cursorInterval = setInterval(() => {
         setShowCursor((prev) => !prev);
       }, 1000);
 
       return () => clearInterval(cursorInterval);
     }
-  }, [isComplete]);
+  }, [isComplete, prefersReducedMotion]);
 
   return (
     <div className={className}>

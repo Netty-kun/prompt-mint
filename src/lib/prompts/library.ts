@@ -1,3 +1,8 @@
+import {
+  BuyerLibraryMutationBody,
+  parseRequestBody,
+} from "@/lib/api/requestSchemas";
+
 export interface SavedPromptListing {
   purchaseId: string;
   promptId: string;
@@ -87,12 +92,17 @@ export async function savePromptListing(
   walletAddress: string,
   promptId: string,
 ): Promise<void> {
+  const parsed = parseRequestBody(BuyerLibraryMutationBody, { walletAddress, promptId });
+  if (!parsed.success) {
+    throw new Error("walletAddress and promptId are required.");
+  }
+
   const response = await fetch("/api/prompts/buyer/save", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ walletAddress, promptId }),
+    body: JSON.stringify(parsed.data),
   });
 
   await parseJson<{ saved?: boolean }>(response);
@@ -102,12 +112,17 @@ export async function unsavePromptListing(
   walletAddress: string,
   promptId: string,
 ): Promise<void> {
+  const parsed = parseRequestBody(BuyerLibraryMutationBody, { walletAddress, promptId });
+  if (!parsed.success) {
+    throw new Error("walletAddress and promptId are required.");
+  }
+
   const response = await fetch("/api/prompts/buyer/unsave", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ walletAddress, promptId }),
+    body: JSON.stringify(parsed.data),
   });
 
   await parseJson<{ saved?: boolean }>(response);

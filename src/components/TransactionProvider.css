@@ -20,6 +20,16 @@
   pointer-events: auto;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .notification {
+    transition: none !important;
+    animation: none !important;
+  }
+  .notification.slide-in {
+    transform: translateY(0);
+  }
+}
+
 .notification.slide-in {
   transform: translateY(0);
   animation: slide-in 0.3s ease forwards;

@@ -18,8 +18,8 @@ export default async function handler(req: any, res: any) {
     res.status(404).json({ error: "Review not found or not eligible for appeal" });
     return;
   }
-  if (review.moderationDecision?.status !== "edited" && review.moderationDecision?.status !== "removed") {
-    res.status(409).json({ error: "Only moderated reviews can be appealed" });
+  if (review.moderation?.status !== "removed") {
+    res.status(409).json({ error: "Only removed reviews can be appealed" });
     return;
   }
 

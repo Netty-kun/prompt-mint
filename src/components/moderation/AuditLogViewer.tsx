@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Shield, Search, Filter, ChevronLeft, ChevronRight, AlertTriangle, Download } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { signModeratorAuth, type SignMessageFn } from "../../lib/auth/moderatorAuth";
+import { SkeletonTable } from "../Skeleton";
 
 interface ModerationLogEntry {
   id: string;
@@ -29,15 +31,19 @@ interface LogsResponse {
 
 interface AuditLogViewerProps {
   moderatorAddress: string;
-  signMessage: (_message: string) => Promise<{ signedMessage?: string } | string>;
+  signMessage?: SignMessageFn;
   apiBase?: string;
 }
 
 const ACTION_LABELS: Record<string, string> = {
   review_removed: "Review Removed",
-  prompt_hidden: "Prompt Hidden",
-  user_warned: "User Warned",
   review_approved: "Review Approved",
+  user_warned: "User Warned",
+  report_resolved: "Report Resolved",
+  report_dismissed: "Report Dismissed",
+  prompt_takedown: "Listing Taken Down",
+  prompt_reinstated: "Listing Reinstated",
+  prompt_hidden: "Prompt Hidden",
   prompt_featured: "Prompt Featured",
 };
 
@@ -66,7 +72,11 @@ const formatAddress = (address: string) => {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 };
 
-export const AuditLogViewer = ({ moderatorAddress, signMessage, apiBase = "/api/moderation/logs" }: AuditLogViewerProps) => {
+export const AuditLogViewer = ({
+  moderatorAddress,
+  signMessage,
+  apiBase = "/api/moderation/logs",
+}: AuditLogViewerProps) => {
   const [logs, setLogs] = useState<ModerationLogEntry[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -78,14 +88,30 @@ export const AuditLogViewer = ({ moderatorAddress, signMessage, apiBase = "/api/
   const [isExporting, setIsExporting] = useState(false);
 
   const fetchLogs = useCallback(async () => {
+    if (!signMessage) {
+      setError("Wallet does not support message signing — cannot verify moderator identity.");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
-    const params = new URLSearchParams({ moderatorAddress, page: String(page) });
-    if (filterAction) params.set("action", filterAction);
-    if (filterType) params.set("targetType", filterType);
-
     try {
+      const { moderatorTimestamp, moderatorSignature } = await signModeratorAuth(
+        moderatorAddress,
+        "moderation-logs",
+        signMessage,
+      );
+
+      const params = new URLSearchParams({
+        moderatorAddress,
+        moderatorTimestamp: String(moderatorTimestamp),
+        moderatorSignature,
+        page: String(page),
+      });
+      if (filterAction) params.set("action", filterAction);
+      if (filterType) params.set("targetType", filterType);
+
       const response = await fetch(`${apiBase}?${params}`);
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
@@ -100,7 +126,7 @@ export const AuditLogViewer = ({ moderatorAddress, signMessage, apiBase = "/api/
     } finally {
       setIsLoading(false);
     }
-  }, [moderatorAddress, page, filterAction, filterType, apiBase]);
+  }, [moderatorAddress, signMessage, page, filterAction, filterType, apiBase]);
 
   useEffect(() => {
     if (moderatorAddress) {
@@ -114,6 +140,11 @@ export const AuditLogViewer = ({ moderatorAddress, signMessage, apiBase = "/api/
   };
 
   const handleExport = async () => {
+    if (!signMessage) {
+      setError("Wallet does not support message signing — cannot verify moderator identity.");
+      return;
+    }
+
     setIsExporting(true);
     setError(null);
     try {
@@ -238,18 +269,7 @@ export const AuditLogViewer = ({ moderatorAddress, signMessage, apiBase = "/api/
       )}
 
       {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="p-5 rounded-2xl bg-white/5 border border-white/5 animate-pulse"
-            >
-              <div className="h-4 w-48 bg-white/10 rounded mb-3" />
-              <div className="h-3 w-full bg-white/10 rounded mb-2" />
-              <div className="h-3 w-2/3 bg-white/10 rounded" />
-            </div>
-          ))}
-        </div>
+        <SkeletonTable rows={5} columns={4} />
       ) : logs.length === 0 ? (
         <div className="text-center py-12">
           <Shield className="h-12 w-12 text-slate-600 mx-auto mb-4" />

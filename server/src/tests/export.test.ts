@@ -145,7 +145,7 @@ describe("User Data Export", () => {
     await RequestExport(req, res);
 
     expect(res.statusCode).toBe(401);
-    expect(res._getJSONData().error).toBe("Invalid signature.");
+    expect(res._getJSONData().message).toBe("Invalid signature.");
   });
 
   it("should download export and handle expired links", async () => {
@@ -165,6 +165,6 @@ describe("User Data Export", () => {
 
     await DownloadExport(req, res);
     expect(res.statusCode).toBe(410);
-    expect(res._getJSONData().error).toContain("expired");
+    expect(res._getJSONData().message).toContain("expired");
   });
 });

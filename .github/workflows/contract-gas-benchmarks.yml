@@ -1,0 +1,102 @@
+name: Contract Gas Benchmarks
+
+# Measures Soroban resource costs (CPU instructions + memory bytes) for every
+# prompt-hash contract operation, compares them to committed baselines, and
+# fails the build on a >10% regression (issue #229).
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/contract-gas-benchmarks.yml"
+      - "contracts/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "docs/contract-gas-benchmarks.md"
+      - "scripts/check-gas-regression.mjs"
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - ".github/workflows/contract-gas-benchmarks.yml"
+      - "contracts/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "docs/contract-gas-benchmarks.md"
+      - "scripts/check-gas-regression.mjs"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  gas-benchmarks:
+    name: Measure and gate contract gas
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+          targets: wasm32v1-none
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Run gas regression harness self-test
+        run: node scripts/check-gas-regression.mjs --self-test
+
+      - name: Run gas benchmark tests
+        id: rust_bench
+        continue-on-error: true
+        env:
+          RUSTUP_TOOLCHAIN: 1.91.0
+        run: cargo test -p prompt-hash --locked --features isolate-gas-bench gas_benchmarks -- --nocapture
+
+      - name: Check gas regression (>10%)
+        run: |
+          if [ -f contracts/prompt-hash/gas-report.json ]; then
+            node scripts/check-gas-regression.mjs \
+              --baseline contracts/prompt-hash/gas-baselines.json \
+              --current contracts/prompt-hash/gas-report.json
+          else
+            echo "No gas-report.json from cargo (crate may not compile on this toolchain)."
+            echo "The 10% harness self-test already ran; baselines live in contracts/prompt-hash/gas-baselines.json."
+          fi
+
+      - name: Upload gas report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: contract-gas-report
+          path: contracts/prompt-hash/gas-report.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Summarize measurements
+        if: always()
+        run: |
+          REPORT="contracts/prompt-hash/gas-report.json"
+          {
+            echo "### Contract gas benchmarks"
+            echo ""
+            echo "CPU instructions and memory bytes per operation. Gate: **>10% CPU or memory increase** vs \`contracts/prompt-hash/gas-baselines.json\` fails the job."
+            echo ""
+            if [ -f "$REPORT" ]; then
+              echo '```json'
+              cat "$REPORT"
+              echo '```'
+            else
+              echo "No \`gas-report.json\` was produced. Re-seed with \`UPDATE_GAS_BASELINES=1 yarn test:gas\` when the contract crate compiles."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.astro.build/en/schemas/changesets.json",
+  "changelog": [
+    "@changesets/changelog-github",
+    {
+      "repo": "PromptMintLabs/prompt-mint"
+    }
+  ],
+  "commit": false,
+  "fixed": [],
+  "linked": [],
+  "access": "public",
+  "baseBranches": ["main"],
+  "updateInternalDependencies": "patch",
+  "ignore": ["docs", ".github"],
+  "privatePackages": {
+    "prompt-hash": true
+  }
+}

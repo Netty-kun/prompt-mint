@@ -10,10 +10,26 @@ import type { ClientConfig, PromptInfo, PurchaseResult, VoteResult } from "./typ
 export class PromptHashClient {
   private readonly apiUrl: string;
   private readonly network: "testnet" | "mainnet";
+  private readonly apiVersion: string;
 
   constructor(config: ClientConfig) {
     this.apiUrl = config.apiUrl.replace(/\/$/, "");
     this.network = config.network ?? "testnet";
+    this.apiVersion = config.apiVersion ?? "latest";
+  }
+
+  // ── Internal helpers ────────────────────────────────────────────────────────
+
+  /**
+   * Build the base request headers for every API call.
+   * Includes the Accept-Version header so the server returns the schema
+   * version that this client was configured for.
+   */
+  private baseHeaders(): Record<string, string> {
+    return {
+      "Content-Type": "application/json",
+      "Accept-Version": this.apiVersion,
+    };
   }
 
   // ── Prompt queries ──────────────────────────────────────────────────────────
@@ -34,7 +50,9 @@ export class PromptHashClient {
       limit: String(Math.min(params.limit ?? 20, 100)),
       ...(params.sort ? { sort: params.sort } : {}),
     });
-    const res = await fetch(`${this.apiUrl}/api/prompts?${qs}`);
+    const res = await fetch(`${this.apiUrl}/api/prompts?${qs}`, {
+      headers: this.baseHeaders(),
+    });
     if (!res.ok) throw new Error(`listPrompts failed: ${res.status}`);
     const data = await res.json() as { prompts?: PromptInfo[] } | PromptInfo[];
     return Array.isArray(data) ? data : (data.prompts ?? []);
@@ -44,7 +62,9 @@ export class PromptHashClient {
    * Fetch a single prompt by ID.
    */
   async getPrompt(promptId: string): Promise<PromptInfo> {
-    const res = await fetch(`${this.apiUrl}/api/prompts/${promptId}`);
+    const res = await fetch(`${this.apiUrl}/api/prompts/${promptId}`, {
+      headers: this.baseHeaders(),
+    });
     if (!res.ok) throw new Error(`getPrompt failed: ${res.status}`);
     return res.json() as Promise<PromptInfo>;
   }
@@ -56,7 +76,8 @@ export class PromptHashClient {
    */
   async hasLicense(promptId: string, buyerWallet: string): Promise<boolean> {
     const res = await fetch(
-      `${this.apiUrl}/api/prompts/${promptId}/license?wallet=${encodeURIComponent(buyerWallet)}`
+      `${this.apiUrl}/api/prompts/${promptId}/license?wallet=${encodeURIComponent(buyerWallet)}`,
+      { headers: this.baseHeaders() },
     );
     if (res.status === 404) return false;
     if (!res.ok) throw new Error(`hasLicense failed: ${res.status}`);
@@ -81,7 +102,7 @@ export class PromptHashClient {
   ): Promise<PurchaseResult> {
     const res = await fetch(`${this.apiUrl}/api/prompts/${promptId}/purchase`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.baseHeaders(),
       body: JSON.stringify({ buyerWallet, txHash }),
     });
     if (!res.ok) {
@@ -100,7 +121,7 @@ export class PromptHashClient {
   async upvote(promptId: string, voterWallet: string): Promise<VoteResult> {
     const res = await fetch(`${this.apiUrl}/api/governance/vote/${promptId}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.baseHeaders(),
       body: JSON.stringify({ voterWallet }),
     });
     const data = await res.json() as { upvotes?: number; error?: string };
@@ -112,7 +133,9 @@ export class PromptHashClient {
    * Fetch the top community-ranked prompts.
    */
   async getTopPrompts(limit = 10): Promise<Array<{ promptId: string; upvotes: number }>> {
-    const res = await fetch(`${this.apiUrl}/api/governance/top?limit=${limit}`);
+    const res = await fetch(`${this.apiUrl}/api/governance/top?limit=${limit}`, {
+      headers: this.baseHeaders(),
+    });
     if (!res.ok) throw new Error(`getTopPrompts failed: ${res.status}`);
     const data = await res.json() as { prompts?: Array<{ promptId: string; upvotes: number }> };
     return data.prompts ?? [];

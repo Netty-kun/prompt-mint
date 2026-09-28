@@ -1,0 +1,17 @@
+node_modules/
+server/node_modules/
+dist/
+server/build/
+target/
+playwright-report/
+test-results/
+.load-results/
+load-results/
+.yarn/
+packages/
+*.lock
+Cargo.lock
+yarn.lock
+CHANGELOG.md
+docs/
+*.md

@@ -39,6 +39,9 @@ Every challenge issuance and prompt unlock attempt creates a structured, immutab
 | `unlock_integrity_failure` | Decrypted content hash mismatch |
 | `unlock_error` | Unexpected error during unlock |
 | `unlock_rate_limited` | Unlock request blocked by rate limiter |
+| `unlock_key_recovery_verified` | Operator recovery drill passed (authenticated) |
+| `unlock_key_recovery_failed` | Recovery verification failed (key mismatch / integrity) |
+| `unlock_key_recovery_denied` | Recovery endpoint called without valid admin token |
 
 ### Reason codes
 
@@ -52,6 +55,11 @@ Every challenge issuance and prompt unlock attempt creates a structured, immutab
 | `no_access` | `unlock_no_access` |
 | `integrity_failure` | `unlock_integrity_failure` |
 | `error` | `unlock_error` |
+| `recovery_compromise` | `unlock_key_recovery_verified` (compromise scenario) |
+| `recovery_permanent_loss` | `unlock_key_recovery_verified` (permanent loss scenario) |
+| `recovery_rollback` | `unlock_key_recovery_verified` (rollback scenario) |
+| `unauthorized` | `unlock_key_recovery_denied` |
+| `key_mismatch` / `integrity_failure` / `decrypt_failed` | `unlock_key_recovery_failed` |
 
 ---
 

@@ -390,6 +390,7 @@ checkVar("REDIS_URL", false);
 checkVar("PUBLIC_CHAT_API_BASE", false);
 checkVar("CHALLENGE_TOKEN_SECRET_PREVIOUS", false);
 checkVar("ADMIN_ROTATION_TOKEN", false);
+checkVar("ADMIN_RECOVERY_TOKEN", false);
 checkVar("CHALLENGE_TOKEN_ROTATION_TIMESTAMP", false);
 checkVar("CHALLENGE_TOKEN_GRACE_PERIOD_MS", false);
 

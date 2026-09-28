@@ -1,0 +1,83 @@
+{
+  "monitors": [
+    {
+      "name": "RPC call latency P99",
+      "type": "query alert",
+      "query": "avg(last_5m):p99:rpc_call_duration_ms{*} > 2000",
+      "message": "Soroban RPC P99 latency is above 2s.\n{{#is_alert}}@pagerduty-promptmint{{/is_alert}}\nRunbook: docs/operations/monitoring.md",
+      "tags": ["service:prompt-mint", "severity:critical"],
+      "priority": 1,
+      "notifications": "@pagerduty-promptmint",
+      "options": {
+        "thresholds": { "critical": 2000 },
+        "notify_no_data": true,
+        "renotify_interval": 30
+      }
+    },
+    {
+      "name": "API error rate",
+      "type": "query alert",
+      "query": "avg(last_5m):sum:api_request_error_total{*}.as_rate() > 5",
+      "message": "API 5xx rate exceeded 5 errors/sec.\n{{#is_alert}}@pagerduty-promptmint{{/is_alert}}\nRunbook: docs/operations/monitoring.md",
+      "tags": ["service:prompt-mint", "severity:critical"],
+      "priority": 1,
+      "notifications": "@pagerduty-promptmint",
+      "options": {
+        "thresholds": { "critical": 5 },
+        "notify_no_data": false,
+        "renotify_interval": 15
+      }
+    },
+    {
+      "name": "API endpoint health",
+      "type": "query alert",
+      "query": "avg(last_2m):min:api_endpoint_health{*} < 1",
+      "message": "An API endpoint is unhealthy.\n{{#is_alert}}@pagerduty-promptmint{{/is_alert}}\nRunbook: docs/operations/monitoring.md",
+      "tags": ["service:prompt-mint", "severity:critical"],
+      "priority": 1,
+      "notifications": "@pagerduty-promptmint",
+      "options": {
+        "thresholds": { "critical": 1 },
+        "notify_no_data": true,
+        "renotify_interval": 15
+      }
+    },
+    {
+      "name": "Unlock failure rate",
+      "type": "query alert",
+      "query": "avg(last_5m):sum:unlock_failure_total{*}.as_rate() > 10",
+      "message": "Elevated unlock failures. Check RPC and key material.\nRunbook: docs/operations/incident-response.md",
+      "tags": ["service:prompt-mint", "severity:warning"],
+      "priority": 3,
+      "notifications": "@slack-promptmint-alerts",
+      "options": {
+        "thresholds": { "critical": 10 },
+        "notify_no_data": false
+      }
+    },
+    {
+      "name": "Transaction volume drop",
+      "type": "query alert",
+      "query": "sum(last_15m):sum:transaction_volume_total{*}.as_count() < 1",
+      "message": "No Stellar submits in 15 minutes during expected traffic.",
+      "tags": ["service:prompt-mint", "severity:warning"],
+      "priority": 3,
+      "notifications": "@slack-promptmint-alerts",
+      "options": {
+        "thresholds": { "critical": 1 }
+      }
+    },
+    {
+      "name": "Active users drop",
+      "type": "query alert",
+      "query": "sum(last_15m):sum:active_users_total{*}.as_count() < 1",
+      "message": "Active-user heartbeat dropped to zero for 15 minutes.",
+      "tags": ["service:prompt-mint", "severity:warning"],
+      "priority": 3,
+      "notifications": "@slack-promptmint-alerts",
+      "options": {
+        "thresholds": { "critical": 1 }
+      }
+    }
+  ]
+}

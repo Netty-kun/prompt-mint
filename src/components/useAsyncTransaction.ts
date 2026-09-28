@@ -27,12 +27,18 @@ const translateStellarError = (error: unknown): string => {
   const txCode = err.response?.data?.extras?.result_codes?.transaction;
   const opCodes = err.response?.data?.extras?.result_codes?.operations;
 
-  if (txCode === "tx_bad_auth" || txCode === "tx_bad_auth_extra") return "Transaction signing failed. Please check your wallet.";
+  if (txCode === "tx_bad_auth" || txCode === "tx_bad_auth_extra") {
+    return "Transaction signing failed. Reconnect your wallet and try again — if this keeps happening, your wallet extension may need updating.";
+  }
   if (txCode === "tx_insufficient_balance" || opCodes?.includes("op_underfunded")) {
     return translateError("insufficient funds");
   }
-  if (opCodes?.includes("op_no_trust")) return "A required trustline is missing for this transaction.";
-  if (opCodes?.includes("op_not_authorized")) return "Your account is not authorized to perform this operation.";
+  if (opCodes?.includes("op_no_trust")) {
+    return "This transaction needs a trustline for this asset. Add the trustline in your wallet, then try again.";
+  }
+  if (opCodes?.includes("op_not_authorized")) {
+    return "Your account is not authorized to perform this operation. Make sure you're signed in with the correct wallet, or contact support if you believe this is a mistake.";
+  }
 
   return err.message ? translateError(err.message) : translateError("unknown");
 };

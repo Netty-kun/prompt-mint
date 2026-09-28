@@ -1,0 +1,104 @@
+name: Bug Report
+description: Report a bug to help improve Prompt Mint
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **SECURITY WARNING:** Do not include seed phrases, private keys, wallet secrets, or other sensitive credentials in your report. If you discover a security vulnerability, please report it privately using our [Security Policy](https://github.com/PromptMintLabs/prompt-mint/security/policy) instead.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: Provide a clear and concise description of the issue you encountered.
+      placeholder: What did you expect to happen, and what actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Go to ...
+        2. Click on ...
+        3. See error...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Where did you encounter this issue?
+      options:
+        - Testnet (Stellar Testnet)
+        - Mainnet (Stellar Mainnet)
+        - Local development
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: network
+    attributes:
+      label: Network
+      description: Which blockchain network were you using?
+      options:
+        - Stellar Testnet
+        - Stellar Mainnet
+        - Not applicable (frontend/UI issue)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: wallet
+    attributes:
+      label: Wallet used
+      description: Which wallet were you using?
+      options:
+        - Freighter
+        - Lobstr
+        - Stellar Laboratory
+        - Manual transaction submission
+        - Not applicable (non-wallet issue)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or error messages
+      description: |
+        Provide any error messages, console logs, or other relevant output (make sure to redact any sensitive information).
+        Paste your logs in a code block.
+      placeholder: |
+        ```
+        Error: [error message here]
+        ...
+        ```
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add any other context that might help us understand the issue.
+      placeholder: Browser version, OS, device type, etc.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I have read the [Contributing Guidelines](https://github.com/PromptMintLabs/prompt-mint/blob/main/CONTRIBUTING.md)
+          required: true
+        - label: I have not included any sensitive information (seed phrases, private keys, secrets)
+          required: true
+        - label: I have searched for similar issues
+          required: true

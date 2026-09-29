@@ -58,6 +58,12 @@ function seedMockReviews() {
       helpfulVotes: 1,
       voters: [],
       editHistory: [],
+      moderation: {
+        status: "removed",
+        moderatorAddress: "gmoderator1",
+        reason: "Inappropriate content",
+        updatedAt: Date.now() - 86400000 * 3,
+      },
     },
     {
       id: "review_3",

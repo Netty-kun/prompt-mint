@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   Activity,
+  Gavel,
   Menu,
   MessageCircle,
   ReceiptText,
@@ -36,6 +37,7 @@ const navItems = [
   { to: "/history", label: "History", icon: ReceiptText },
   { to: "/status", label: "Status", icon: Activity },
   { to: "/moderation", label: "Moderation", icon: Shield },
+  { to: "/appeals", label: "Appeals", icon: Gavel },
 ];
 
 const mobileNavItems = [

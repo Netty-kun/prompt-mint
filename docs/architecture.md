@@ -127,11 +127,12 @@ The current repository supports a lightweight deployment model:
 ## Appeal Status Timeline
 
 The moderation UI includes a controlled `AppealStatusTimeline` component at
-`src/components/moderation/AppealStatusTimeline.tsx`. It renders appeal
-progression from submission through review and decision, including approved and
-rejected outcomes. The component accepts an ordered event list and a current
-status, so an appeals API can provide live data without coupling the presentation
-to a storage or transport layer.
+`src/components/moderation/AppealStatusTimeline.tsx` and an appeal submission
+flow at `/appeals`. Submissions are wallet-signed, tied to an owned moderated
+review, and stored with validated supporting files in MongoDB. The timeline
+shows the submitted state returned by the API; it remains transport-agnostic so
+moderation tooling can provide later decisions without coupling presentation to
+storage.
 
 Each event uses one of these statuses: `submitted`, `under_review`, `decision`,
 `resolved`, or `rejected`. Events may include an ISO timestamp and a moderator

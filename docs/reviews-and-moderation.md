@@ -23,3 +23,12 @@ Moderation deliberately has no API action for hiding or featuring prompts: those
 Submitting a report matches an existing active report when the prompt, normalized reporter wallet, and reason are the same and the existing status is `pending` or `investigating`. A match returns the existing report ID with `duplicate: true` and does not create another record. Different reporters remain separate reports for corroboration; a resolved or dismissed report does not block a later submission.
 
 These endpoints are additive. Existing callers that request only `promptId` continue to receive the first page sorted newest-first; pagination and filter metadata are additional fields.
+
+## Abuse report response SLA metric
+
+When a moderator resolves or dismisses a report through `POST /api/moderation/actions`, the API emits an abuse report response SLA metric measuring the time from report filing to moderator response:
+
+- `abuse_report_response_duration_ms` (gauge) — response time in milliseconds, labeled with `targetType` and `outcome` (`resolved` or `dismissed`).
+- `abuse_report_responded_total` (counter) — volume of responded reports, labeled with `targetType` and `outcome`.
+
+Both metrics are exported via `GET /api/metrics` and documented in [`docs/operations/metrics.md`](./operations/metrics.md).

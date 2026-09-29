@@ -17,6 +17,7 @@ export interface Review {
   createdAt: number;
   verified: boolean;
   helpfulVotes: number;
+  helpfulVoteAlert?: boolean;
   editedAt?: number;
   moderation?: ReviewModerationDecision | null;
   sellerResponse?: {
@@ -58,6 +59,7 @@ export interface ReviewEligibilityResponse {
 export interface VoteResponse {
   voted: boolean;
   helpfulVotes: number;
+  helpfulVoteAlert?: boolean;
   message?: string;
 }
 

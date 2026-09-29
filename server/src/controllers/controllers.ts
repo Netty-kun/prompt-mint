@@ -378,10 +378,29 @@ export const SubmitPromptReport = asyncRoute(async (req, res) => {
     throw new AppError("Prompt not found", 404);
   }
 
+  const normalizedReporterAddress = reporterAddress.toLowerCase();
+  const reportMatch = {
+    promptId: String(promptId),
+    reporterAddress: normalizedReporterAddress,
+    reason,
+    status: { $in: ["pending", "investigating"] },
+  };
+  const existingReport = await Report.findOne(reportMatch);
+
+  if (existingReport) {
+    res.status(200).json({
+      success: true,
+      duplicate: true,
+      message: "An active report matching this submission already exists",
+      reportId: existingReport._id,
+    });
+    return;
+  }
+
   // Create new report
   const newReport = new Report({
-    promptId,
-    reporterAddress: reporterAddress.toLowerCase(),
+    promptId: String(promptId),
+    reporterAddress: normalizedReporterAddress,
     reason,
     description: description || "",
   });
@@ -847,13 +866,15 @@ export const GetUserPreferences = asyncRoute(async (req, res) => {
     newReviews: true,
     priceAlerts: true,
     emailNotifications: true,
+    weeklyCreatorDigest: false,
   };
 
   if (!user) {
-    return res.json({ preferences: defaultPrefs });
+    return res.json({ preferences: defaultPrefs, emailAddress: "" });
   }
 
   res.json({
+    emailAddress: user.email || "",
     preferences: {
       ...defaultPrefs,
       ...(user.notificationPreferences?.toObject?.() || user.notificationPreferences || {}),
@@ -864,7 +885,7 @@ export const GetUserPreferences = asyncRoute(async (req, res) => {
 export const UpdateUserPreferences = asyncRoute(async (req, res) => {
   await connectDb();
 
-  const { walletAddress, preferences } = req.body;
+  const { walletAddress, preferences, emailAddress } = req.body;
 
   if (!walletAddress) {
     throw new AppError("Wallet address is required", 400, "MISSING_FIELDS");
@@ -874,11 +895,24 @@ export const UpdateUserPreferences = asyncRoute(async (req, res) => {
     throw new AppError("Preferences object is required", 400, "MISSING_FIELDS");
   }
 
+  const normalizedEmail = typeof emailAddress === "string" ? emailAddress.trim().toLowerCase() : "";
+  if (emailAddress !== undefined && normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    throw new AppError("A valid email address is required", 400, "INVALID_INPUT");
+  }
+
   let user = await User.findOne({ walletAddress: walletAddress.toLowerCase() });
+  const resultingEmail = emailAddress === undefined ? user?.email : normalizedEmail;
+  const existingPreferences = user?.notificationPreferences?.toObject?.() || user?.notificationPreferences || {};
+  const resultingDigestPreference = preferences.weeklyCreatorDigest ?? existingPreferences.weeklyCreatorDigest ?? false;
+  if (resultingDigestPreference && !resultingEmail) {
+    throw new AppError("Add an email address to enable the weekly creator digest", 400, "INVALID_INPUT");
+  }
+
   if (!user) {
     user = new User({
       walletAddress: walletAddress.toLowerCase(),
       username: `user${Math.floor(100000 + Math.random() * 900000)}`,
+      email: normalizedEmail || undefined,
       notificationPreferences: preferences,
     });
   } else {
@@ -886,12 +920,14 @@ export const UpdateUserPreferences = asyncRoute(async (req, res) => {
       ...(user.notificationPreferences || {}),
       ...preferences,
     };
+    if (emailAddress !== undefined) user.email = normalizedEmail || undefined;
   }
 
   await user.save();
 
   res.status(200).json({
     message: "Preferences updated successfully",
+    emailAddress: user.email || "",
     preferences: user.notificationPreferences,
   });
 });

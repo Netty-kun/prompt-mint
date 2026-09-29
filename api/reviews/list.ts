@@ -1,4 +1,4 @@
-import { getReviews } from "./data";
+import { getReviews, hasHelpfulVoteManipulationAlert } from "./data";
 import { negotiateVersion } from "../../src/lib/api/versionGuard";
 import { withVersion } from "../../src/lib/api/payloadVersion";
 import { apiError, ErrorCode } from "../../src/lib/api/errorCodes";
@@ -66,6 +66,9 @@ export default async function handler(req: any, res: any) {
         ? visibleReviews.reduce((sum, r) => sum + r.rating, 0) / visibleReviews.length
         : 0;
 
+    res.status(200).json(
+      withVersion({
+        reviews: pagedReviews.map((r) => ({
     res.status(200).json(withVersion({
       reviews: [
         ...pagedReviews.map((r) => ({
@@ -77,6 +80,25 @@ export default async function handler(req: any, res: any) {
           createdAt: r.createdAt,
           verified: r.verified,
           helpfulVotes: r.helpfulVotes,
+          helpfulVoteAlert: hasHelpfulVoteManipulationAlert(r),
+          editedAt: r.editedAt,
+          sellerResponse: r.sellerResponse || null,
+        })),
+        stats: {
+          total: visibleReviews.length,
+          averageRating: Math.round(averageRating * 10) / 10,
+          distribution: {
+            5: visibleReviews.filter((r) => r.rating === 5).length,
+            4: visibleReviews.filter((r) => r.rating === 4).length,
+            3: visibleReviews.filter((r) => r.rating === 3).length,
+            2: visibleReviews.filter((r) => r.rating === 2).length,
+            1: visibleReviews.filter((r) => r.rating === 1).length,
+          },
+        },
+        pagination: { page, limit, total, totalPages, hasMore: page < totalPages },
+        filters: { sort, rating: rating ?? null },
+      }, version),
+    );
           editedAt: r.editedAt,
           moderation: r.moderation || null,
           sellerResponse: r.sellerResponse || null,

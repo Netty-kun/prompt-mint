@@ -25,16 +25,7 @@ import { docsRouter } from "./routes/docsRoutes";
 import { metricsRouter } from "./routes/metricsRoutes";
 import { metricsMiddleware } from "./middleware/metricsMiddleware";
 import { idempotency } from "./middleware/idempotency";
-import { versionNegotiation } from "./middleware/versioning";
-import type { Server } from "node:http";
-import type { Socket } from "node:net";
-import { closeDb } from "./db/connectDb";
-import { closeRedis } from "./lib/redisConnection";
-import { flushPendingWebhooks } from "./services/webhookDispatcher";
-import { closeCache } from "./services/cacheService";
-import { shutdownTelemetry } from "./instrumentation";
-import emailCampaignRouter from "./controllers/emailCampaignControllers.js";
-import reviewAnalyticsRouter from "./controllers/reviewAnalyticsControllers.js";
+import { sendWeeklyCreatorMetricsDigests } from "./services/creatorMetricsDigest";
 
 const app = express();
 
@@ -126,6 +117,18 @@ app.get("/health", async (req, res) => {
 
 export const server = app.listen(port, () => {
   console.log(`Listening on port ${port}`);
+
+  const creatorDigestSchedule = process.env.CREATOR_METRICS_DIGEST_CRON || "0 9 * * 1";
+  cron.schedule(
+    creatorDigestSchedule,
+    () => {
+      sendWeeklyCreatorMetricsDigests().catch((err) => {
+        console.error("[creatorMetricsDigest] Scheduled digest run failed:", err?.message ?? err);
+      });
+    },
+    { timezone: "UTC" },
+  );
+  console.log(`[creatorMetricsDigest] Weekly schedule started (${creatorDigestSchedule} UTC).`);
 
   // STARTS THE INDEXER HERE
   // startIndexer().catch((err: any) => {

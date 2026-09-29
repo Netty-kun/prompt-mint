@@ -1,6 +1,7 @@
 import httpMocks from "node-mocks-http";
-import { GetPromptReports } from "../controllers/controllers";
+import { GetPromptReports, SubmitPromptReport } from "../controllers/controllers";
 import Report from "../models/Report";
+import Prompt from "../models/Prompt";
 import connectDb from "../db/connectDb";
 
 jest.mock("../models/User");
@@ -71,5 +72,75 @@ describe("GetPromptReports admin authentication", () => {
     await GetPromptReports(req, res);
 
     expect(res.statusCode).toBe(200);
+  });
+});
+
+describe("SubmitPromptReport deduplication", () => {
+  beforeEach(() => {
+    jest.resetAllMocks();
+    (connectDb as jest.Mock).mockResolvedValue(true);
+    (Prompt.findById as jest.Mock).mockResolvedValue({ _id: "prompt-1" });
+  });
+
+  it("returns the existing active report for the same reporter, prompt, and reason", async () => {
+    const existingReport = { _id: "existing-report" };
+    (Report.findOne as jest.Mock).mockResolvedValue(existingReport);
+    const req = httpMocks.createRequest({
+      method: "POST",
+      url: "http://localhost/api/prompts/report",
+      body: {
+        promptId: "prompt-1",
+        reporterAddress: "GREPORTER",
+        reason: "plagiarism",
+        description: "Repeated report text",
+      },
+    });
+    const res = httpMocks.createResponse();
+
+    await SubmitPromptReport(req, res);
+
+    expect(Report.findOne).toHaveBeenCalledWith({
+      promptId: "prompt-1",
+      reporterAddress: "greporter",
+      reason: "plagiarism",
+      status: { $in: ["pending", "investigating"] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res._getJSONData()).toMatchObject({
+      success: true,
+      duplicate: true,
+      reportId: "existing-report",
+    });
+  });
+
+  it("creates a separate report from a different reporter for the same prompt and reason", async () => {
+    (Report.findOne as jest.Mock).mockResolvedValue(null);
+    const save = jest.fn().mockResolvedValue(undefined);
+    (Report as unknown as jest.Mock).mockImplementation(function (this: any, report: Record<string, unknown>) {
+      Object.assign(this, report, { _id: "new-report", save });
+    });
+    const req = httpMocks.createRequest({
+      method: "POST",
+      url: "http://localhost/api/prompts/report",
+      body: {
+        promptId: "prompt-1",
+        reporterAddress: "GOTHERREPORTER",
+        reason: "plagiarism",
+        description: "A separate concern",
+      },
+    });
+    const res = httpMocks.createResponse();
+
+    await SubmitPromptReport(req, res);
+
+    expect(Report.findOne).toHaveBeenCalledWith({
+      promptId: "prompt-1",
+      reporterAddress: "gotherreporter",
+      reason: "plagiarism",
+      status: { $in: ["pending", "investigating"] },
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(201);
+    expect(res._getJSONData()).toMatchObject({ success: true, reportId: "new-report" });
   });
 });

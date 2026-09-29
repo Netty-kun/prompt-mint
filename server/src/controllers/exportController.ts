@@ -10,6 +10,7 @@ import Vote from "../models/Vote";
 import Purchase from "../models/Purchase";
 import WebhookSubscription from "../models/WebhookSubscription";
 import Notification from "../models/Notification";
+import CreatorDigestDelivery from "../models/CreatorDigestDelivery";
 import { cacheSet, cacheGet, cacheDel } from "../services/cacheService";
 import connectDb from "../db/connectDb";
 
@@ -137,12 +138,13 @@ export const RequestExport = asyncRoute(async (req: Request, res: Response) => {
 
   await connectDb();
 
-  const [user, reports, votes, purchases, webhookSubscriptions] = await Promise.all([
+  const [user, reports, votes, purchases, webhookSubscriptions, creatorDigestDeliveries] = await Promise.all([
     User.findOne({ walletAddress: address.toLowerCase() }).lean(),
     Report.find({ reporterAddress: address.toLowerCase() }).lean(),
     Vote.find({ voterWallet: address.toLowerCase() }).lean(),
     Purchase.find({ buyerWallet: address.toLowerCase() }).lean(),
     WebhookSubscription.find({ walletAddress: address.toLowerCase() }).lean(),
+    CreatorDigestDelivery.find({ creatorWallet: address.toLowerCase() }).lean(),
   ]);
 
   const exportData = {
@@ -151,12 +153,13 @@ export const RequestExport = asyncRoute(async (req: Request, res: Response) => {
       excluded: ["auditLogs", "reviews"]
     },
     data: {
-      profile: user ? { username: user.username, rating: user.rating, createdAt: user.createdAt, updatedAt: user.updatedAt } : null,
+      profile: user ? { username: user.username, email: user.email, rating: user.rating, createdAt: user.createdAt, updatedAt: user.updatedAt } : null,
       preferences: user?.notificationPreferences || null,
       purchases,
       reports,
       votes,
-      webhookSubscriptions
+      webhookSubscriptions,
+      creatorDigestDeliveries,
     }
   };
 
@@ -175,8 +178,8 @@ export const RequestExport = asyncRoute(async (req: Request, res: Response) => {
 // ─── Account deletion (#91: data retention & deletion policies) ───────────────
 //
 // Mirrors the export challenge/signature flow above so only the wallet owner
-// can request deletion. Off-chain personal data (profile, notification
-// preferences, webhook subscriptions) is removed. Records that constitute
+// can request deletion. Off-chain personal data (profile, digest email,
+// notification preferences, webhook subscriptions, digest delivery records) is removed. Records that constitute
 // marketplace/on-chain history -- purchases, marketplace transactions,
 // votes, and moderation reports -- are intentionally retained so that
 // on-chain access authority and audit integrity are unaffected, per
@@ -219,10 +222,11 @@ export const RequestAccountDeletion = asyncRoute(async (req: Request, res: Respo
 
   const walletAddress = String(address).toLowerCase();
 
-  const [userResult, webhookResult, notificationResult] = await Promise.all([
+  const [userResult, webhookResult, notificationResult, digestDeliveryResult] = await Promise.all([
     User.deleteOne({ walletAddress }),
     WebhookSubscription.deleteMany({ walletAddress }),
     Notification.deleteMany({ walletAddress }),
+    CreatorDigestDelivery.deleteMany({ creatorWallet: walletAddress }),
   ]);
 
   res.status(200).json({
@@ -231,6 +235,7 @@ export const RequestAccountDeletion = asyncRoute(async (req: Request, res: Respo
       profile: userResult.deletedCount > 0,
       webhookSubscriptions: webhookResult.deletedCount,
       notifications: notificationResult.deletedCount,
+      creatorDigestDeliveries: digestDeliveryResult.deletedCount,
     },
     retained: {
       collections: ["purchases", "marketplaceTransactions", "votes", "reports"],

@@ -8,6 +8,11 @@ const userSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
     },
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+    },
     username: {
       type: String,
       //   required: true,
@@ -39,6 +44,7 @@ const userSchema = new mongoose.Schema(
       newReviews: { type: Boolean, default: true },
       priceAlerts: { type: Boolean, default: true },
       emailNotifications: { type: Boolean, default: true },
+      weeklyCreatorDigest: { type: Boolean, default: false },
     },
   },
   {

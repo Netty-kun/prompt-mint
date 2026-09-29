@@ -31,8 +31,8 @@ system.
 | --- | --- | --- |
 | On-chain marketplace state | Indefinite | Owned by the Soroban contract; required for `has_access` checks and is outside any centralized deletion mechanism. |
 | Purchase / order / marketplace-transaction records | Indefinite, unless the account is deleted (see §3) | Mirrors on-chain events; needed for buyer/creator transaction history, dispute resolution, and to avoid breaking access-entitlement lookups. |
-| User profile & notification preferences | Until the user requests deletion, or 24 months of inactivity | Personal, off-chain, safe to remove without affecting marketplace access. |
-| Notifications | Until the user requests deletion, or 90 days after creation (auto-pruned) | Transient, purely informational. |
+| User profile, digest email & notification preferences | Until the user requests deletion, or 24 months of inactivity | Personal, off-chain, safe to remove without affecting marketplace access. |
+| Notifications and creator digest delivery records | Until the user requests deletion, or 90 days after creation (notifications auto-pruned) | Transient, informational; delivery records prevent duplicate weekly emails. |
 | Webhook subscriptions | Until removed by the owner or account deletion | Integration configuration; no purpose once the account is gone. |
 | Moderation reports & votes | Indefinite | Governance/audit trail; needed to prevent abuse of the reporting and voting systems even after an account is deleted. |
 | Audit logs | 12 months, then archived/rotated | Operational security requirement; see `docs/security/`. |
@@ -54,9 +54,9 @@ A wallet owner can request deletion of their off-chain profile data:
    calls `POST /api/users/delete` with `{ address, token, signature }`.
 3. On a valid signature, the server deletes:
    - the `User` profile document (`username`, `rating`,
-     `notificationPreferences`),
+     `email`, `notificationPreferences`),
    - the wallet's `WebhookSubscription` documents,
-   - the wallet's `Notification` documents.
+   - the wallet's `Notification` and `CreatorDigestDelivery` documents.
 
 See `server/src/controllers/exportController.ts`
 (`GenerateDeletionChallenge`, `RequestAccountDeletion`) and

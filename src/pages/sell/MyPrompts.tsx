@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { CreatorDashboard } from "@/components/sell/CreatorDashboard";
+import { SellerResponseTour } from "@/components/sell/SellerResponseTour";
 import { TransactionHistoryPanel } from "@/components/dashboard/TransactionHistoryPanel";
 import { useWallet } from "@/hooks/useWallet";
 import { browserStellarConfig } from "@/lib/stellar/browserConfig";
@@ -398,6 +399,8 @@ const MyPrompts = ({ onCreateNew: _onCreateNew }: MyPromptsProps) => {
         isError={createdQuery.isError}
         onRefresh={refreshPromptLists}
       />
+
+      <SellerResponseTour />
 
       {address ? (
         <TransactionHistoryPanel

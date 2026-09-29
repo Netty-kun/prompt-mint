@@ -19,6 +19,7 @@ import creatorReputationHandler from "./controllers/creatorReputationController"
 import cron from "node-cron";
 import { JSON_BODY_LIMIT, jsonBodyTooLargeHandler } from "./middleware/bodySizeLimit";
 import { idempotency } from "./middleware/idempotency";
+import { sendWeeklyCreatorMetricsDigests } from "./services/creatorMetricsDigest";
 
 const app = express();
 
@@ -70,6 +71,18 @@ app.get("/health", async (req, res) => {
 
 app.listen(port, () => {
   console.log(`Listening on port ${port}`);
+
+  const creatorDigestSchedule = process.env.CREATOR_METRICS_DIGEST_CRON || "0 9 * * 1";
+  cron.schedule(
+    creatorDigestSchedule,
+    () => {
+      sendWeeklyCreatorMetricsDigests().catch((err) => {
+        console.error("[creatorMetricsDigest] Scheduled digest run failed:", err?.message ?? err);
+      });
+    },
+    { timezone: "UTC" },
+  );
+  console.log(`[creatorMetricsDigest] Weekly schedule started (${creatorDigestSchedule} UTC).`);
 
   // STARTS THE INDEXER HERE
   // startIndexer().catch((err: any) => {

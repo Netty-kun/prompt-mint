@@ -7,6 +7,7 @@ export interface Review {
   createdAt: number;
   verified: boolean;
   helpfulVotes: number;
+  helpfulVoteAlert?: boolean;
   editedAt?: number;
   sellerResponse?: {
     text: string;
@@ -47,6 +48,7 @@ export interface ReviewEligibilityResponse {
 export interface VoteResponse {
   voted: boolean;
   helpfulVotes: number;
+  helpfulVoteAlert?: boolean;
   message?: string;
 }
 

@@ -1,7 +1,72 @@
 {
-  "title": "Prompt Mint: Unlock Services Dashboard",
-  "description": "Visualizes API health, unlock outcomes, and latency. Separates service failures from user errors.",
+  "title": "Prompt Mint production dashboard",
+  "description": "RPC latency, error rates, active users, transaction volume, and API endpoint health. Import into Grafana or view alongside Datadog.",
+  "tags": ["prompt-mint", "stellar", "production"],
+  "timezone": "utc",
   "panels": [
+    {
+      "title": "RPC call latency",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(rpc_call_duration_ms_bucket[5m])) by (le, method))",
+          "legendFormat": "{{method}} P99"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(rpc_call_duration_ms_bucket[5m])) by (le, method))",
+          "legendFormat": "{{method}} P50"
+        }
+      ],
+      "description": "Soroban RPC round-trip latency by method. PagerDuty pages when P99 stays above 2s for 5 minutes."
+    },
+    {
+      "title": "Error rates",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(api_request_error_total[5m])) by (path)",
+          "legendFormat": "{{path}} 5xx/sec"
+        },
+        {
+          "expr": "sum(rate(rpc_call_error_total[5m])) by (method)",
+          "legendFormat": "RPC {{method}} errors/sec"
+        }
+      ],
+      "description": "API and RPC error rates. Critical PagerDuty alert at >5 API errors/sec."
+    },
+    {
+      "title": "Active users",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(active_users_total[15m])) by (surface)",
+          "legendFormat": "{{surface}}"
+        }
+      ],
+      "description": "Privacy-safe active-user heartbeats from wallet connect and browse analytics events."
+    },
+    {
+      "title": "Transaction volume",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(transaction_volume_total[15m])) by (kind)",
+          "legendFormat": "{{kind}}"
+        }
+      ],
+      "description": "Submitted Stellar transactions (purchase, listing, unlock-adjacent submits)."
+    },
+    {
+      "title": "API endpoint health",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "min(api_endpoint_health) by (path)",
+          "legendFormat": "{{path}}"
+        }
+      ],
+      "description": "1 = healthy, 0 = failing. Pages PagerDuty when any scraped endpoint stays unhealthy for 2 minutes."
+    },
     {
       "title": "Service Failures (5xx Errors)",
       "type": "timeseries",

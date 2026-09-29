@@ -46,3 +46,12 @@ async function connectDb() {
 }
 
 export default connectDb;
+
+/** Close the shared pool only after HTTP work has finished draining. */
+export async function closeDb() {
+  if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
+  if (cached) {
+    cached.conn = null;
+    cached.promise = null;
+  }
+}

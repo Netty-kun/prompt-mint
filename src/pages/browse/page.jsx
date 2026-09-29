@@ -5,6 +5,7 @@ import { Navigation } from "@/components/navigation";
 import { Footer } from "@/components/footer";
 import { FeaturedPrompts } from "@/components/featured-prompts";
 import { SEOHead } from "@/components/seo/SEOHead";
+import { useModalShortcut } from "@/providers/KeyboardShortcutsProvider";
 import { Button } from "@/components/ui/button";
 import { MarketplaceFilters } from "@/components/MarketplaceFilters";
 import { SearchBar } from "@/components/SearchBar";
@@ -24,25 +25,39 @@ export default function BrowsePage() {
   };
   const [priceRange, setPriceRange] = useState([0, 25]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedTag, setSelectedTag] = useState("");
+  const [creatorQuery, setCreatorQuery] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const [sortBy, setSortBy] = useState("recent");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
+  useModalShortcut("filters", () => setIsFilterOpen(false), isFilterOpen);
+
+  const toggleCategory = (cat) => {
+    setSelectedCategories((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat],
+    );
+  };
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
-    if (selectedCategory) count++;
+    if (selectedCategories.length > 0) count++;
     if (selectedTag) count++;
     if (searchQuery) count++;
+    if (creatorQuery) count++;
+    if (showInactive) count++;
     if (sortBy !== "recent") count++;
     if (priceRange[0] !== 0 || priceRange[1] !== 25) count++;
     return count;
-  }, [selectedCategory, selectedTag, searchQuery, sortBy, priceRange]);
+  }, [selectedCategories, selectedTag, searchQuery, creatorQuery, showInactive, sortBy, priceRange]);
 
   const handleClearFilters = () => {
     setSearchQuery("");
-    setSelectedCategory("");
+    setSelectedCategories([]);
     setSelectedTag("");
+    setCreatorQuery("");
+    setShowInactive(false);
     setSortBy("recent");
     setPriceRange([0, 25]);
   };
@@ -113,16 +128,20 @@ export default function BrowsePage() {
               <MarketplaceFilters
                 categories={categories}
                 tags={tags}
-                selectedCategory={selectedCategory}
-                setSelectedCategory={setSelectedCategory}
+                selectedCategories={selectedCategories}
+                toggleCategory={toggleCategory}
                 selectedTag={selectedTag}
                 setSelectedTag={setSelectedTag}
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
+                creatorQuery={creatorQuery}
+                setCreatorQuery={setCreatorQuery}
                 priceRange={priceRange}
                 setPriceRange={setPriceRange}
                 sortBy={sortBy}
                 setSortBy={setSortBy}
+                showInactive={showInactive}
+                setShowInactive={setShowInactive}
                 onClear={handleClearFilters}
               />
             </div>
@@ -153,11 +172,13 @@ export default function BrowsePage() {
             </div>
 
             <FetchAllPrompts
-              selectedCategory={selectedCategory}
+              selectedCategories={selectedCategories}
               selectedTag={selectedTag}
               priceRange={priceRange}
               searchQuery={searchQuery}
+              creatorQuery={creatorQuery}
               sortBy={sortBy}
+              showInactive={showInactive}
             />
           </div>
         </div>
@@ -185,16 +206,20 @@ export default function BrowsePage() {
             <MarketplaceFilters
               categories={categories}
               tags={tags}
-              selectedCategory={selectedCategory}
-              setSelectedCategory={setSelectedCategory}
+              selectedCategories={selectedCategories}
+              toggleCategory={toggleCategory}
               selectedTag={selectedTag}
               setSelectedTag={setSelectedTag}
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
+              creatorQuery={creatorQuery}
+              setCreatorQuery={setCreatorQuery}
               priceRange={priceRange}
               setPriceRange={setPriceRange}
               sortBy={sortBy}
               setSortBy={setSortBy}
+              showInactive={showInactive}
+              setShowInactive={setShowInactive}
               onClear={handleClearFilters}
             />
             <Button

@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import handler from "./status";
 import { _resetCircuitBreakerRegistry } from "../src/lib/observability/circuitBreaker";
@@ -12,15 +14,20 @@ function makeReq(method: string) {
 }
 
 function makeRes() {
-  const res: { statusCode: number; body: any; status: (code: number) => typeof res; json: (data: any) => typeof res } = {
-    statusCode: 0,
-    body: undefined,
+  const res = {
+    statusCode: 0 as number,
+    body: undefined as any,
+    writableEnded: false,
     status(code: number) {
       res.statusCode = code;
       return res;
     },
     json(data: any) {
       res.body = data;
+      res.writableEnded = true;
+      return res;
+    },
+    setHeader(_name: string, _value: string) {
       return res;
     },
   };
@@ -39,8 +46,13 @@ describe("GET /api/status", () => {
 
   it("reports all services up and closed breakers on the success path", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = String(input);
-      if (url.includes("soroban") || url.includes("stellar")) {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : String((input as Request).url ?? input);
+      if (url.includes("soroban") || url.includes("stellar") || url.includes("getHealth")) {
         return new Response(JSON.stringify({ result: { status: "healthy" } }), { status: 200 });
       }
       return new Response("ok", { status: 200 });

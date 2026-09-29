@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { createGunzip } from "zlib";
 import { pipeline, PassThrough } from "stream";
 import { promisify } from "util";
@@ -48,7 +48,7 @@ async function fetchLatestBackup(): Promise<Record<string, Buffer>> {
 }
 
 /** Import NDJSON buffers into an isolated MongoDB connection */
-async function importToIsolatedDb(data: Record<string, Buffer>, sourceDocCount: number) {
+async function importToIsolatedDb(data: Record<string, Buffer>) {
   const uri = process.env.MONGODB_URI_RESTORE ?? process.env.MONGODB_URI;
   if (!uri) throw new Error("MONGODB_URI is not configured.");
   const conn = await mongoose.createConnection(uri, { dbName: "prompthash_restore" });
@@ -68,15 +68,30 @@ async function importToIsolatedDb(data: Record<string, Buffer>, sourceDocCount: 
   return conn;
 }
 
-/** Simple validation – integrity (download succeeded), schema (always true), counts match source */
-function validateRestore(data: Record<string, Buffer>, sourceDocCount: number) {
+const EXPECTED_COLLECTIONS = ["prompts", "purchases", "promptversions", "indexerstates", "auditlogs"];
+
+/** Validate decompression, NDJSON shape, expected collections, and document count. */
+export function validateRestore(data: Record<string, Buffer>, sourceDocCount: number) {
   let total = 0;
+  let integrity = true;
+  let schema = EXPECTED_COLLECTIONS.every((collection) => collection in data);
+
   for (const buf of Object.values(data)) {
     const lines = buf.toString().trim().split("\n").filter(Boolean);
+    for (const line of lines) {
+      try {
+        const document = JSON.parse(line);
+        if (!document || typeof document !== "object" || Array.isArray(document)) {
+          schema = false;
+        }
+      } catch {
+        integrity = false;
+      }
+    }
     total += lines.length;
   }
   const countsMatch = total === sourceDocCount;
-  return { integrity: true, schema: true, counts: countsMatch };
+  return { integrity, schema, counts: countsMatch };
 }
 
 /** Reconcile restored indexer state with on‑chain events – placeholder simple check */
@@ -112,14 +127,15 @@ export async function runRestoreDrill(): Promise<void> {
     if (!latestBackup) throw new Error("No successful backup available.");
     const data = await fetchLatestBackup();
     const validation = validateRestore(data, latestBackup.totalDocuments ?? 0);
-    conn = await importToIsolatedDb(data, latestBackup.totalDocuments ?? 0);
+    conn = await importToIsolatedDb(data);
     const indexerOk = await reconcileIndexer(conn);
+    const validationPassed = validation.integrity && validation.schema && validation.counts && indexerOk;
     await RestoreRun.create({
-      status: validation.integrity && validation.schema && validation.counts && indexerOk ? "success" : "failure",
+      status: validationPassed ? "success" : "failure",
       durationMs: Date.now() - start,
       validation: { ...validation, indexerReconciled: indexerOk },
     });
-    if (!validation.integrity || !validation.schema || !validation.counts || !indexerOk) {
+    if (!validationPassed) {
       const msg = "Restore validation failed";
       await alertOnFailure(msg);
       throw new Error(msg);

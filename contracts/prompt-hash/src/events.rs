@@ -20,7 +20,16 @@ struct PromptSaleStatusUpdated {
 struct PromptPriceUpdated {
     #[topic]
     pub prompt_id: u128,
+    /// Price in stroops before the change.
+    pub previous_price: i128,
+    /// Price in stroops after the change.
     pub price_stroops: i128,
+}
+
+#[contractevent]
+struct PriceBoundsSet {
+    pub min_price: Option<i128>,
+    pub max_price: Option<i128>,
 }
 
 #[contractevent]
@@ -34,6 +43,14 @@ struct PromptPurchased {
     pub creator_amount: i128,
     pub platform_amount: i128,
     pub referrer_amount: i128,
+}
+
+#[contractevent]
+struct AccessRevoked {
+    #[topic]
+    pub prompt_id: u128,
+    pub buyer: Address,
+    pub revoker: Address,
 }
 
 // ─── #274: Referral tracking events ──────────────────────────────────────
@@ -119,6 +136,14 @@ struct ListingExtended {
 }
 
 #[contractevent]
+struct PromptExpiringSoon {
+    #[topic]
+    pub prompt_id: u128,
+    pub creator: Address,
+    pub expires_at: u64,
+}
+
+#[contractevent]
 struct SubscriptionConfigured {
     #[topic]
     pub creator: Address,
@@ -168,10 +193,24 @@ impl Events {
         PromptSaleStatusUpdated { prompt_id, active }.publish(env);
     }
 
-    pub fn emit_prompt_price_updated(env: &Env, prompt_id: u128, price_stroops: i128) {
+    pub fn emit_prompt_price_updated(
+        env: &Env,
+        prompt_id: u128,
+        previous_price: i128,
+        price_stroops: i128,
+    ) {
         PromptPriceUpdated {
             prompt_id,
+            previous_price,
             price_stroops,
+        }
+        .publish(env);
+    }
+
+    pub fn emit_price_bounds_set(env: &Env, min_price: Option<i128>, max_price: Option<i128>) {
+        PriceBoundsSet {
+            min_price,
+            max_price,
         }
         .publish(env);
     }
@@ -196,6 +235,15 @@ impl Events {
             creator_amount,
             platform_amount,
             referrer_amount,
+        }
+        .publish(env);
+    }
+
+    pub fn emit_access_revoked(env: &Env, prompt_id: u128, buyer: Address, revoker: Address) {
+        AccessRevoked {
+            prompt_id,
+            buyer,
+            revoker,
         }
         .publish(env);
     }
@@ -306,6 +354,20 @@ impl Events {
         ListingExtended {
             prompt_id,
             new_expires_at,
+        }
+        .publish(env);
+    }
+
+    pub fn emit_prompt_expiring_soon(
+        env: &Env,
+        prompt_id: u128,
+        creator: Address,
+        expires_at: u64,
+    ) {
+        PromptExpiringSoon {
+            prompt_id,
+            creator,
+            expires_at,
         }
         .publish(env);
     }
@@ -502,11 +564,47 @@ struct UpgradeCancelled {
     pub cancelled_wasm_hash: soroban_sdk::BytesN<32>,
 }
 
+// ─── #195: Emergency Pause Events ────────────────────────────────────
+
+#[contractevent]
+struct EmergencyPaused {
+    pub paused_by: Address,
+}
+
+#[contractevent]
+struct UnpauseProposed {
+    pub proposed_at: u64,
+}
+
+#[contractevent]
+struct UnpauseConfirmed {
+    pub confirmed_at: u64,
+}
+
+#[contractevent]
+struct UnpauseCancelled {}
+
 // NB: `Events` is already declared earlier in this file; this is an additional
 // `impl Events` block (multiple impl blocks for one type are valid Rust). The
 // duplicate `pub struct Events;` that previously sat here has been removed to
 // keep the crate compiling.
 impl Events {
+    pub fn emit_emergency_paused(env: &Env, paused_by: Address) {
+        EmergencyPaused { paused_by }.publish(env);
+    }
+
+    pub fn emit_unpause_proposed(env: &Env, proposed_at: u64) {
+        UnpauseProposed { proposed_at }.publish(env);
+    }
+
+    pub fn emit_unpause_confirmed(env: &Env, confirmed_at: u64) {
+        UnpauseConfirmed { confirmed_at }.publish(env);
+    }
+
+    pub fn emit_unpause_cancelled(env: &Env) {
+        UnpauseCancelled {}.publish(env);
+    }
+
     pub fn emit_promotion_created(
         env: &Env,
         prompt_id: u128,

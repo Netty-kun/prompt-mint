@@ -9,6 +9,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { BrowserRouter } from "react-router-dom";
 
+import { KeyboardShortcutsProvider } from "./providers/KeyboardShortcutsProvider.tsx";
+
 import { WalletProvider } from "./providers/WalletProvider.tsx";
 import { TransactionProvider } from "./components/TransactionProvider.tsx";
 import { NotificationProvider } from "./providers/NotificationProvider.tsx";
@@ -36,17 +38,19 @@ createRoot(document.getElementById("root") as HTMLElement).render(
               <WalletProvider>
                 <NetworkStateProvider>
                   <BrowserRouter>
-                    <CurrencyProvider>
-                      <App />
-                      <Toaster
-                        theme="dark"
-                        position="bottom-right"
-                        toastOptions={{
-                          className:
-                            "!bg-slate-900 !border !border-white/10 !text-white !shadow-2xl",
-                        }}
-                      />
-                    </CurrencyProvider>
+                    <KeyboardShortcutsProvider>
+                      <CurrencyProvider>
+                        <App />
+                        <Toaster
+                          theme="dark"
+                          position="bottom-right"
+                          toastOptions={{
+                            className:
+                              "!bg-slate-900 !border !border-white/10 !text-white !shadow-2xl",
+                          }}
+                        />
+                      </CurrencyProvider>
+                    </KeyboardShortcutsProvider>
                   </BrowserRouter>
                 </NetworkStateProvider>
               </WalletProvider>

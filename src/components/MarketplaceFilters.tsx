@@ -1,4 +1,5 @@
 
+import { Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,16 +14,20 @@ import {
 export interface MarketplaceFiltersProps {
   categories: string[];
   tags: string[];
-  selectedCategory: string;
-  setSelectedCategory: (_cat: string) => void;
+  selectedCategories: string[];
+  toggleCategory: (_cat: string) => void;
   selectedTag: string;
   setSelectedTag: (tag: string) => void;
   searchQuery: string;
   setSearchQuery: (_q: string) => void;
+  creatorQuery: string;
+  setCreatorQuery: (_q: string) => void;
   priceRange: [number, number];
   setPriceRange: (_r: [number, number]) => void;
   sortBy: string;
   setSortBy: (_s: string) => void;
+  showInactive: boolean;
+  setShowInactive: (_on: boolean) => void;
   onClear: () => void;
 }
 /* eslint-enable no-unused-vars */
@@ -32,22 +37,28 @@ const PRICE_MAX = 25;
 export function MarketplaceFilters({
   categories,
   tags,
-  selectedCategory,
-  setSelectedCategory,
+  selectedCategories,
+  toggleCategory,
   selectedTag,
   setSelectedTag,
+  creatorQuery,
+  setCreatorQuery,
   priceRange,
   setPriceRange,
   sortBy,
   setSortBy,
+  showInactive,
+  setShowInactive,
   onClear,
 }: MarketplaceFiltersProps) {
   const hasActiveFilters =
-    Boolean(selectedCategory) ||
+    selectedCategories.length > 0 ||
     Boolean(selectedTag) ||
+    Boolean(creatorQuery) ||
     sortBy !== "recent" ||
     priceRange[0] !== 0 ||
-    priceRange[1] !== PRICE_MAX;
+    priceRange[1] !== PRICE_MAX ||
+    showInactive;
 
   return (
     <div className="space-y-8">
@@ -60,39 +71,54 @@ export function MarketplaceFilters({
           <Badge
             role="button"
             tabIndex={0}
-            onClick={() => setSelectedCategory("")}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedCategory(""); } }}
-            className={`cursor-pointer select-none transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none ${
-              !selectedCategory
-                ? "bg-emerald-500 text-slate-950 hover:bg-emerald-400 border-transparent"
-                : "border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/10"
-            }`}
+            onClick={() => onClear()}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClear(); } }}
+            className="cursor-pointer select-none transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/10"
           >
             All
           </Badge>
-          {categories.map((cat) => (
-            <Badge
-              key={cat}
-              role="button"
-              tabIndex={0}
-              onClick={() =>
-                setSelectedCategory(selectedCategory === cat ? "" : cat)
-              }
-              onKeyDown={(e) => { 
-                if (e.key === "Enter" || e.key === " ") { 
-                  e.preventDefault(); 
-                  setSelectedCategory(selectedCategory === cat ? "" : cat); 
-                } 
-              }}
-              className={`cursor-pointer select-none transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none ${
-                selectedCategory === cat
-                  ? "bg-emerald-500 text-slate-950 hover:bg-emerald-400 border-transparent"
-                  : "border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/10"
-              }`}
-            >
-              {cat}
-            </Badge>
-          ))}
+          {categories.map((cat) => {
+            const isActive = selectedCategories.includes(cat);
+            return (
+              <Badge
+                key={cat}
+                role="button"
+                tabIndex={0}
+                onClick={() => toggleCategory(cat)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    toggleCategory(cat);
+                  }
+                }}
+                className={`cursor-pointer select-none transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none ${
+                  isActive
+                    ? "bg-emerald-500 text-slate-950 hover:bg-emerald-400 border-transparent"
+                    : "border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/10"
+                }`}
+              >
+                {cat}
+              </Badge>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Creator search */}
+      <div className="space-y-3">
+        <p className="text-[10px] uppercase tracking-[0.25em] font-bold text-slate-500">
+          Creator
+        </p>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input
+            type="text"
+            value={creatorQuery}
+            onChange={(e) => setCreatorQuery(e.target.value)}
+            placeholder="Search by creator address..."
+            className="w-full h-11 rounded-xl border border-white/10 bg-white/5 pl-10 pr-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            aria-label="Search by creator address"
+          />
         </div>
       </div>
 
@@ -206,9 +232,29 @@ export function MarketplaceFilters({
             <SelectItem value="sales">Best Sellers</SelectItem>
             <SelectItem value="price-low">Price: Low to High</SelectItem>
             <SelectItem value="price-high">Price: High to Low</SelectItem>
+            <SelectItem value="ending-soon">Ending Soon</SelectItem>
             <SelectItem value="bookmarked">Bookmarked First</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Availability */}
+      <div className="space-y-3">
+        <p className="text-[10px] uppercase tracking-[0.25em] font-bold text-slate-500">
+          Availability
+        </p>
+        <label className="flex items-center justify-between gap-3 cursor-pointer">
+          <span className="text-sm text-slate-400">
+            Include inactive listings
+          </span>
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+            className="h-4 w-4 accent-emerald-500"
+            aria-label="Include inactive listings"
+          />
+        </label>
       </div>
 
       {/* Clear */}

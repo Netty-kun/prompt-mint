@@ -87,6 +87,19 @@ crontab server/backup.crontab
 
 The server also starts an in-process 24-hour interval automatically when `BACKUP_S3_BUCKET` is set.
 
+### Automated restore verification
+
+Enable the daily restore drill with `ENABLE_RESTORE_DRILL=true`. It downloads the
+latest successful backup, restores it into the database named `prompthash_restore`
+or the database configured by `MONGODB_URI_RESTORE`, validates every NDJSON record,
+checks the expected collections and document count, and verifies the indexer state.
+Use `RESTORE_DRILL_CRON` to change the default `0 3 * * *` schedule. Failures are
+recorded in `RestoreRun` and sent to `BACKUP_ALERT_WEBHOOK` when configured.
+
+The recovery objectives are an RPO below one hour, based on hourly backups, and an
+RTO below 30 minutes for a restore. The drill measures restore duration so operators
+can confirm the RTO remains achievable.
+
 ### Monitor backup health
 
 The `/health` endpoint includes backup status:

@@ -12,7 +12,13 @@ export type AuditAction =
   | "unlock_rate_limited"
   | "unlock_key_recovery_verified"
   | "unlock_key_recovery_failed"
-  | "unlock_key_recovery_denied";
+  | "unlock_key_recovery_denied"
+  | "auth_failure"
+  | "admin_action"
+  | "large_transaction"
+  | "webhook_delivery_failure"
+  | "secrets_rotated"
+  | "secrets_rotation_failed";
 
 export type AuditResult = "success" | "failure" | "blocked";
 
@@ -34,6 +40,12 @@ const auditLogSchema = new mongoose.Schema(
         "unlock_key_recovery_verified",
         "unlock_key_recovery_failed",
         "unlock_key_recovery_denied",
+        "auth_failure",
+        "admin_action",
+        "large_transaction",
+        "webhook_delivery_failure",
+        "secrets_rotated",
+        "secrets_rotation_failed",
       ] as AuditAction[],
       index: true,
     },
@@ -67,6 +79,14 @@ const auditLogSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    /** Monotonic server-local order and cryptographic link to the prior row. */
+    sequence: { type: Number, required: true, unique: true, index: true },
+    previousHash: { type: String, default: null },
+    hash: { type: String, required: true, unique: true, index: true },
+    occurredAt: { type: Date, required: true, index: true },
+    // Only non-sensitive identifiers / amounts belong here. Never payloads,
+    // credentials, signatures, plaintext, or secrets.
+    metadata: { type: mongoose.Schema.Types.Mixed, default: null },
     // Sensitive fields are NEVER stored — only stable reason codes above.
     // No plaintext, no keys, no raw signatures, no challenge secrets.
   },
@@ -90,6 +110,15 @@ auditLogSchema.pre("updateOne", function () {
 });
 auditLogSchema.pre("updateMany", function () {
   throw new Error("AuditLog records are immutable.");
+});
+auditLogSchema.pre("deleteOne", function () {
+  throw new Error("AuditLog records are immutable.");
+});
+auditLogSchema.pre("deleteMany", function () {
+  throw new Error("AuditLog records are immutable.");
+});
+auditLogSchema.pre("save", function () {
+  if (!this.isNew) throw new Error("AuditLog records are immutable.");
 });
 
 export const AuditLog =

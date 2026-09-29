@@ -9,13 +9,13 @@ import {
 import {
   ChevronLeft,
   ChevronRight,
-  PackageSearch,
   Loader2,
   BookmarkCheck,
   Heart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/hooks/useWallet";
+import { useDebounce } from "@/hooks/useDebounce";
 import { browserStellarConfig } from "@/lib/stellar/browserConfig";
 import {
   getAllPrompts,
@@ -43,6 +43,7 @@ import { parsePromptIdParam } from "@/lib/marketplace/shareUrls";
 import { PromptCardSkeleton } from "@/components/MarketplaceSkeletons";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useFavorites } from "@/hooks/useFavorites";
+import { useModalShortcut } from "@/providers/KeyboardShortcutsProvider";
 
 const ITEMS_PER_PAGE = 9;
 const ENABLE_INFINITE_SCROLL = true;
@@ -56,11 +57,14 @@ const isMarketplaceConfigured = Boolean(
 const parseXlmNumber = (value: bigint) => Number(stroopsToXlmString(value));
 
 export interface FetchAllPromptsProps {
-  selectedCategory: string;
-  selectedTag: string;
-  priceRange: number[];
-  searchQuery: string;
-  sortBy: string;
+  selectedCategory?: string;
+  selectedCategories?: string[];
+  selectedTag?: string;
+  priceRange?: number[];
+  searchQuery?: string;
+  creatorQuery?: string;
+  sortBy?: string;
+  showInactive?: boolean;
 }
 
 import { FreshnessBadge } from "@/components/FreshnessBadge";
@@ -68,10 +72,13 @@ import { useNetworkState } from "@/hooks/useNetworkState";
 
 const FetchAllPrompts = ({
   selectedCategory,
+  selectedCategories,
   selectedTag,
-  priceRange,
-  searchQuery,
-  sortBy,
+  priceRange = [0, 25],
+  searchQuery = "",
+  creatorQuery = "",
+  sortBy = "recent",
+  showInactive = false,
 }: FetchAllPromptsProps) => {
   const queryClient = useQueryClient();
   const { address } = useWallet();
@@ -190,24 +197,6 @@ const FetchAllPrompts = ({
     },
   });
 
-  // Infinite scroll observer
-  useEffect(() => {
-    if (!ENABLE_INFINITE_SCROLL || !loadMoreRef.current) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const target = entries[0];
-        if (target.isIntersecting && currentPage < totalPages) {
-          setCurrentPage((prev) => prev + 1);
-        }
-      },
-      { threshold: 0.1, rootMargin: "100px" }
-    );
-
-    observer.observe(loadMoreRef.current);
-    return () => observer.disconnect();
-  }, [currentPage]);
-
   const accessQueries = useQueries({
     queries: (address ? (promptsQuery.data ?? []) : []).map((prompt) => ({
       queryKey: ["prompt-access", address, prompt.id.toString()],
@@ -255,10 +244,11 @@ const FetchAllPrompts = ({
 
   const isFavorited = (promptId: string) => favorites.isFavorite(promptId);
 
-  const favoritePromptIds = useMemo(() => new Set(favorites.favorites), [favorites.favorites]);
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+  const debouncedCreatorQuery = useDebounce(creatorQuery, 300);
 
   const filteredPrompts = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const normalizedSearch = debouncedSearchQuery.trim().toLowerCase();
     const allPrompts = promptsQuery.data ?? [];
 
     // When favorites-only is active, show ALL favorited prompts (including inactive)
@@ -271,8 +261,13 @@ const FetchAllPrompts = ({
 
     const prompts = allPrompts.filter((prompt) => {
       const promptPrice = parseXlmNumber(prompt.priceStroops);
+      const normalizedCreator = debouncedCreatorQuery.trim().toLowerCase();
       const matchesCategory =
-        !selectedCategory || prompt.category === selectedCategory;
+        !selectedCategories || selectedCategories.length === 0
+          ? !selectedCategory || prompt.category === selectedCategory
+          : selectedCategories.some(
+              (cat) => cat.toLowerCase() === prompt.category.toLowerCase(),
+            );
       const matchesTag =
         !selectedTag ||
         prompt.tags?.some(
@@ -286,10 +281,21 @@ const FetchAllPrompts = ({
         (prompt.description ?? "").toLowerCase().includes(normalizedSearch) ||
         prompt.creator.toLowerCase().includes(normalizedSearch) ||
         prompt.tags?.some((tag) => tag.toLowerCase().includes(normalizedSearch));
+      const matchesCreator =
+        !normalizedCreator ||
+        prompt.creator.toLowerCase().includes(normalizedCreator);
       const matchesPrice =
         promptPrice >= priceRange[0] && promptPrice <= priceRange[1];
+      const matchesActive = showInactive || prompt.active;
 
-      return prompt.active && matchesCategory && matchesTag && matchesSearch && matchesPrice;
+      return (
+        matchesActive &&
+        matchesCategory &&
+        matchesTag &&
+        matchesSearch &&
+        matchesCreator &&
+        matchesPrice
+      );
     });
 
     switch (sortBy) {
@@ -303,6 +309,13 @@ const FetchAllPrompts = ({
         );
       case "sales":
         return [...prompts].sort((a, b) => b.salesCount - a.salesCount);
+      case "ending-soon":
+        return [...prompts].sort((a, b) => {
+          const aTime = a.activePromotion?.endTime ?? 0;
+          const bTime = b.activePromotion?.endTime ?? 0;
+          if (aTime === bTime) return Number(b.id - a.id);
+          return aTime - bTime;
+        });
       case "bookmarked":
         // Bookmarked (saved) prompts first, newest-first within each group.
         return [...prompts].sort((a, b) => {
@@ -314,12 +327,35 @@ const FetchAllPrompts = ({
       default:
         return [...prompts].sort((a, b) => Number(b.id - a.id));
     }
-  }, [priceRange, promptsQuery.data, searchQuery, selectedCategory, sortBy, savedPromptIds]);
+  }, [priceRange, promptsQuery.data, debouncedSearchQuery, debouncedCreatorQuery, selectedCategories, selectedCategory, sortBy, showInactive, savedPromptIds]);
 
   const totalPages = Math.max(
     1,
     Math.ceil(filteredPrompts.length / ITEMS_PER_PAGE),
   );
+
+  // Infinite scroll observer: load the next page when the sentinel scrolls into view.
+  useEffect(() => {
+    if (
+      !ENABLE_INFINITE_SCROLL ||
+      !loadMoreRef.current ||
+      currentPage >= totalPages
+    )
+      return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const target = entries[0];
+        if (target.isIntersecting && currentPage < totalPages) {
+          setCurrentPage((prev) => prev + 1);
+        }
+      },
+      { threshold: 0.1, rootMargin: "100px" },
+    );
+
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [currentPage, totalPages]);
   
   // For infinite scroll, show all items up to current page
   const currentPrompts = ENABLE_INFINITE_SCROLL
@@ -331,7 +367,7 @@ const FetchAllPrompts = ({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [priceRange, searchQuery, selectedCategory, selectedTag, sortBy]);
+  }, [priceRange, searchQuery, creatorQuery, selectedCategories, selectedCategory, selectedTag, sortBy, showInactive]);
 
   useEffect(() => {
     if (!promptsQuery.data) return;
@@ -394,6 +430,8 @@ const FetchAllPrompts = ({
       setSearchParams(next, { replace: true });
     }
   };
+
+  useModalShortcut("prompt", closePromptModal, !!selectedPrompt);
 
   if (promptsQuery.isLoading) {
     return (
@@ -497,10 +535,10 @@ const FetchAllPrompts = ({
           </div>
         ) : (
           <EmptyState
-            variant={searchQuery || selectedCategory || selectedTag ? "search-empty" : "no-results"}
-            title={searchQuery || selectedCategory || selectedTag ? "No matching prompts" : "No prompts found"}
+            variant={searchQuery || selectedCategory || selectedCategories?.length || selectedTag || creatorQuery || showInactive ? "search-empty" : "no-results"}
+            title={searchQuery || selectedCategory || selectedCategories?.length || selectedTag || creatorQuery || showInactive ? "No matching prompts" : "No prompts found"}
             description={
-              searchQuery || selectedCategory || selectedTag
+              searchQuery || selectedCategory || selectedCategories?.length || selectedTag || creatorQuery || showInactive
                 ? "Try adjusting your filters or search terms to find what you're looking for."
                 : "The marketplace has no active listings at the moment. Check back soon."
             }
@@ -520,7 +558,7 @@ const FetchAllPrompts = ({
                 isSaving={savingPromptId === prompt.id.toString()}
                 onToggleSave={handleToggleSave}
                 isFavorited={isFavorited(prompt.id.toString())}
-                onToggleFavorite={Boolean(address) ? handleToggleFavorite : undefined}
+                onToggleFavorite={address ? handleToggleFavorite : undefined}
               />
             ))}
           </div>

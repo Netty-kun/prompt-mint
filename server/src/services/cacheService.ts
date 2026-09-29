@@ -15,7 +15,9 @@ async function getClient(): Promise<RedisClientType | null> {
   return client;
 }
 
-const DEFAULT_TTL = 60; // seconds
+/** Prompt metadata is relatively stable; keep it for five minutes. */
+export const PROMPT_METADATA_TTL_SECONDS = 5 * 60;
+const DEFAULT_TTL = PROMPT_METADATA_TTL_SECONDS;
 
 export async function cacheGet(key: string): Promise<string | null> {
   try {
@@ -84,7 +86,30 @@ export async function cacheDelPattern(pattern: string): Promise<void> {
   }
 }
 
+/** Release this service's Redis client during process shutdown. */
+export async function closeCache(): Promise<void> {
+  const current = client;
+  client = null;
+  if (!current?.isOpen) return;
+  try {
+    await current.quit();
+  } catch {
+    current.disconnect();
+  }
+}
+
 export const CACHE_KEYS = {
   promptList: (query: string) => `prompts:list:${query}`,
-  promptDetail: (id: string) => `prompts:detail:${id}`,
+  promptDetail: (id: string) => `prompts:metadata:${id}`,
 };
+
+/**
+ * Invalidate every cache representation derived from a prompt contract
+ * record. Call this after an indexed contract event as well as API writes.
+ */
+export async function invalidatePromptMetadata(promptId: string): Promise<void> {
+  await Promise.all([
+    cacheDel(CACHE_KEYS.promptDetail(promptId)),
+    cacheDelPattern("prompts:list:*"),
+  ]);
+}

@@ -2,7 +2,7 @@
 
 ## System Components
 
-PromptHash Stellar is organized into three main layers.
+PromptHash Stellar is organized into three main layers. For the directory-level view, including who owns each directory, which directories may import from which, and which CI workflow gates each one, see the [Monorepo Map & Ownership Boundaries](./monorepo-map.md).
 
 ## 1. Soroban Contract Layer
 
@@ -31,6 +31,8 @@ Core contract methods:
 - `set_fee_wallet`
 
 > For a comprehensive technical reference on storage layout, Mermaid sequence diagrams, basis point fee mathematics, two-step timelocked upgrade mechanisms, and the complete event schema, see the [Smart Contract Architecture Deep-Dive](./smart-contract-architecture.md).
+>
+> For the exact XLM split between seller and platform — including stroop precision, integer rounding, and worked examples — see [Fee Model and Split Math](./fee-model-and-split-math.md).
 
 ## 2. Frontend Application Layer
 
@@ -121,3 +123,16 @@ The current repository supports a lightweight deployment model:
 - frontend + serverless unlock endpoints on Vercel
 - contract deployed to Stellar testnet or future mainnet target
 - optional auxiliary Express server for external chat/proxy services
+
+## Appeal Status Timeline
+
+The moderation UI includes a controlled `AppealStatusTimeline` component at
+`src/components/moderation/AppealStatusTimeline.tsx`. It renders appeal
+progression from submission through review and decision, including approved and
+rejected outcomes. The component accepts an ordered event list and a current
+status, so an appeals API can provide live data without coupling the presentation
+to a storage or transport layer.
+
+Each event uses one of these statuses: `submitted`, `under_review`, `decision`,
+`resolved`, or `rejected`. Events may include an ISO timestamp and a moderator
+note; missing or malformed timestamps are displayed safely as unavailable.

@@ -19,3 +19,8 @@ stellar-access = { workspace = true }
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 proptest = "1"
+
+[features]
+# Compile gas_bench.rs without the (large) unit/fuzz suites. Used by
+# `yarn test:gas` and .github/workflows/contract-gas-benchmarks.yml.
+isolate-gas-bench = []

@@ -1,13 +1,15 @@
-import { createHmac, randomUUID } from "crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import WebhookSubscription from "../models/WebhookSubscription";
 import WebhookDelivery from "../models/WebhookDelivery";
 import WebhookDeadLetter from "../models/WebhookDeadLetter";
 import { WEBHOOK_SCHEMA_VERSION } from "../../../src/lib/api/payloadVersion";
+import { recordAuditEvent } from "./auditTrail";
 
-const MAX_RETRIES = 3;
-const BASE_RETRY_DELAY_MS = 2_000;
-const MAX_RETRY_DELAY_MS = 30_000;
+const MAX_RETRIES = 5;
+const BASE_RETRY_DELAY_MS = 3_000;
+const MAX_RETRY_DELAY_MS = 243_000;
 const MAX_FAILURES_BEFORE_DISABLE = 10;
+const pendingDeliveries = new Set<Promise<void>>();
 
 /** Current webhook payload schema version. Bump on any breaking change to the envelope shape. */
 export const WEBHOOK_PAYLOAD_VERSION = 1;
@@ -43,18 +45,25 @@ export interface WebhookPayload {
   data: Record<string, unknown>;
 }
 
-function signPayload(secret: string, body: string): string {
+export function signWebhookPayload(secret: string, body: string): string {
   return `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
 }
 
-/** Bounded exponential backoff: 2s, 4s, 8s, ... capped at MAX_RETRY_DELAY_MS. */
+/** Constant-time verification helper for Node.js webhook consumers. */
+export function verifyWebhookSignature(secret: string, body: string, signature: string): boolean {
+  const expected = Buffer.from(signWebhookPayload(secret, body));
+  const received = Buffer.from(signature);
+  return expected.length === received.length && timingSafeEqual(expected, received);
+}
+
+/** Bounded exponential backoff: 3s, 9s, 27s, 81s, 243s — capped at MAX_RETRY_DELAY_MS. (#210) */
 function retryDelayMs(attempt: number): number {
-  return Math.min(BASE_RETRY_DELAY_MS * 2 ** attempt, MAX_RETRY_DELAY_MS);
+  return Math.min(BASE_RETRY_DELAY_MS * 3 ** attempt, MAX_RETRY_DELAY_MS);
 }
 
 async function deliverOnce(url: string, secret: string, payload: WebhookPayload): Promise<void> {
   const body = JSON.stringify(payload);
-  const signature = signPayload(secret, body);
+  const signature = signWebhookPayload(secret, body);
 
   const res = await fetch(url, {
     method: "POST",
@@ -65,6 +74,9 @@ async function deliverOnce(url: string, secret: string, payload: WebhookPayload)
       "X-PromptHash-Event": payload.event,
       "X-PromptHash-Version": String(payload.version),
       "X-PromptHash-Schema-Version": payload.schemaVersion,
+      // Included in the signed JSON envelope; consumers should enforce a
+      // short acceptance window to prevent replay attacks.
+      "X-PromptHash-Timestamp": payload.timestamp,
     },
     body,
     signal: AbortSignal.timeout(10_000),
@@ -181,6 +193,12 @@ async function deliverWithRetry(
         lastError: message,
         lastStatusCode: statusCode,
       });
+      void recordAuditEvent({
+        action: "webhook_delivery_failure",
+        result: "failure",
+        reason: "retries_exhausted",
+        metadata: { subscriptionId, event: payload.event, statusCode },
+      });
 
       const updated = await WebhookSubscription.findByIdAndUpdate(
         subscriptionId,
@@ -225,9 +243,29 @@ export async function dispatchEvent(
 
   const payload = buildWebhookPayload(event, data);
 
-  await Promise.allSettled(
+  const work = Promise.allSettled(
     subscriptions.map((sub) => deliverWithRetry(String(sub._id), sub.url, sub.secret, payload)),
-  );
+  ).then(() => undefined);
+  pendingDeliveries.add(work);
+  try {
+    await work;
+  } finally {
+    pendingDeliveries.delete(work);
+  }
+}
+
+/** Wait for in-flight outbound deliveries during graceful shutdown. */
+export async function flushPendingWebhooks(timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (pendingDeliveries.size > 0) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return false;
+    await Promise.race([
+      Promise.allSettled([...pendingDeliveries]),
+      new Promise<void>((resolve) => setTimeout(resolve, remaining)),
+    ]);
+  }
+  return true;
 }
 
 /**
@@ -275,9 +313,18 @@ export async function sendTestEvent(
  * unresolved with its error/attempt count updated so it can be retried
  * again later, and it is NOT re-queued into the automatic retry loop —
  * replay is an explicit, one-shot operator action.
+ *
+ * The stored envelope is re-sent byte-for-byte by default, so `deliveryId`
+ * and `timestamp` are preserved and a receiver can still dedupe an event it
+ * already processed. `refreshTimestamp` re-stamps `timestamp` with the current
+ * time before signing: the signature covers the body, so the result stays
+ * internally consistent, and it is the only way to redeliver an event that is
+ * now older than a receiver's acceptance window. `deliveryId` is deliberately
+ * left alone in both modes.
  */
 export async function replayDeadLetter(
   deadLetterId: string,
+  options: { refreshTimestamp?: boolean } = {},
 ): Promise<{ success: boolean; statusCode?: number; error?: string }> {
   const deadLetter = await WebhookDeadLetter.findById(deadLetterId);
   if (!deadLetter) {
@@ -289,7 +336,10 @@ export async function replayDeadLetter(
     throw new Error(`Subscription ${deadLetter.subscriptionId} for dead letter ${deadLetterId} not found`);
   }
 
-  const payload = deadLetter.payload as WebhookPayload;
+  const stored = deadLetter.payload as WebhookPayload;
+  const payload: WebhookPayload = options.refreshTimestamp
+    ? { ...stored, timestamp: new Date().toISOString() }
+    : stored;
 
   try {
     await deliverOnce(subscription.url, subscription.secret, payload);
@@ -302,6 +352,7 @@ export async function replayDeadLetter(
     });
     deadLetter.resolved = true;
     deadLetter.resolvedAt = new Date();
+    trackReplay(deadLetter);
     await deadLetter.save();
     return { success: true };
   } catch (err) {
@@ -319,7 +370,14 @@ export async function replayDeadLetter(
     deadLetter.attempts += 1;
     deadLetter.lastError = message;
     deadLetter.lastStatusCode = statusCode ?? null;
+    trackReplay(deadLetter);
     await deadLetter.save();
     return { success: false, statusCode, error: message };
   }
+}
+
+/** Records replay attempt bookkeeping for the replay console. */
+function trackReplay(deadLetter: { replayCount?: number; lastReplayedAt?: Date | null }): void {
+  deadLetter.replayCount = (deadLetter.replayCount ?? 0) + 1;
+  deadLetter.lastReplayedAt = new Date();
 }

@@ -6,7 +6,7 @@ import { metrics } from "./metrics";
 export type ApiHandler = (_req: any, _res: any) => Promise<void> | void;
 
 /**
- * Apply security headers to response
+ * Apply hardened security headers to response
  */
 function applySecurityHeaders(req: any, res: any): void {
   // Prevent MIME type sniffing
@@ -24,18 +24,27 @@ function applySecurityHeaders(req: any, res: any): void {
   // Restrict browser features
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
 
-  // HSTS (only in production with HTTPS)
-  if (process.env.NODE_ENV === "production" && (req.headers["x-forwarded-proto"] === "https" || req.secure)) {
+  // Site isolation
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+
+  // HSTS — honour Vercel proxy proto header and HSTS_FORCE env override
+  const isHttps =
+    req.headers?.["x-forwarded-proto"] === "https" ||
+    req.secure ||
+    process.env.HSTS_FORCE === "true";
+
+  if ((process.env.NODE_ENV === "production" && isHttps) || process.env.HSTS_FORCE === "true") {
     res.setHeader(
       "Strict-Transport-Security",
-      "max-age=31536000; includeSubDomains; preload"
+      "max-age=31536000; includeSubDomains; preload",
     );
   }
 
-  // Content Security Policy (basic implementation for API endpoints)
+  // Hardened Content Security Policy for API (pure JSON endpoints, no UI)
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'none'; frame-ancestors 'none';"
+    "default-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'",
   );
 }
 
@@ -66,6 +75,7 @@ export function withObservability(handler: ApiHandler, name: string): ApiHandler
 
       const duration = Date.now() - startTime;
       metrics.emit("api_request_duration_ms", duration, { path: name, status: res.statusCode });
+      metrics.trackEndpointHealth(name, (res.statusCode ?? 200) < 500, duration);
       
       childLogger.info(
         { statusCode: res.statusCode, duration },
@@ -81,6 +91,7 @@ export function withObservability(handler: ApiHandler, name: string): ApiHandler
       );
 
       metrics.emit("api_request_error_total", 1, { path: name, error: message });
+      metrics.trackEndpointHealth(name, false, duration);
 
       if (!res.writableEnded) {
         // Ensure security headers are applied even on error responses

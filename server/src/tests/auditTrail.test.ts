@@ -58,7 +58,7 @@ describe("recordAuditEvent", () => {
     });
 
     expect(mockCreate).toHaveBeenCalledTimes(1);
-    expect(mockCreate).toHaveBeenCalledWith({
+    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
       action: "challenge_issued",
       result: "success",
       promptId: "42",
@@ -66,7 +66,9 @@ describe("recordAuditEvent", () => {
       requestId: "req-001",
       clientIp: "127.0.0.1",
       reason: null,
-    });
+      sequence: expect.any(Number),
+      hash: expect.any(String),
+    }));
   });
 
   it("persists an unlock_success event", async () => {
@@ -308,5 +310,36 @@ describe("queryAuditEvents", () => {
     expect(results).toHaveLength(2);
     expect(results[0].requestId).toBe("req-x");
     expect(results[1].requestId).toBe("req-x");
+  });
+
+  it("records tamper-evident audit record on successful unlock without plaintext (#457)", async () => {
+    mockCreate.mockResolvedValueOnce({} as never);
+
+    const walletAddress = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
+    const promptId = "1048";
+    const requestId = "req-unlock-457";
+
+    await recordAuditEvent({
+      action: "unlock_success",
+      result: "success",
+      promptId,
+      walletAddress,
+      requestId,
+      clientIp: "192.168.1.100",
+      reason: null,
+      metadata: { unlockType: "full_access" },
+    });
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    const savedEntry = mockCreate.mock.calls[0][0];
+
+    expect(savedEntry.action).toBe("unlock_success");
+    expect(savedEntry.result).toBe("success");
+    expect(savedEntry.promptId).toBe("1048");
+    expect(savedEntry.walletAddress).toBe(walletAddress.toLowerCase());
+    expect(savedEntry.occurredAt).toBeInstanceOf(Date);
+    expect(savedEntry.hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(savedEntry).not.toHaveProperty("plaintext");
+    expect(savedEntry).not.toHaveProperty("secret");
   });
 });

@@ -93,6 +93,27 @@ pub enum Error {
     // does not currently compile as-is. `51` is chosen so this new variant
     // stays unique regardless of how that separate cleanup lands.
     AlreadyInitialized = 51,
+    // #194 – contract-upgrade safety checks
+    /// The proposed implementation is unusable (zero hash or it equals the
+    /// currently deployed bytecode), so the upgrade cannot proceed.
+    InvalidImplementation = 52,
+    /// On-chain storage failed integrity validation before an upgrade; the
+    /// upgrade is aborted to avoid losing state.
+    UpgradeStorageIntegrity = 53,
+    /// The upgrade would break existing license holders; aborted before the
+    /// new implementation is installed.
+    UpgradeLicenseIntegrity = 54,
+    // #195 – emergency pause with owner override
+    /// Contract is already paused when attempting emergency pause.
+    EmergencyAlreadyActive = 55,
+    /// No unpause has been proposed.
+    UnpauseNotProposed = 56,
+    /// The timelock for the pending unpause has not elapsed.
+    UnpauseCooldownNotElapsed = 57,
+    /// The buyer's token balance is insufficient to cover the payment.
+    InsufficientBalance = 55,
+    /// set_fee_wallet was already called once; the fee wallet is immutable.
+    FeeWalletAlreadySet = 56,
 }
 
 #[contracttype]
@@ -122,6 +143,44 @@ pub enum DataKey {
     Subscription(Address, Address),
     SubscriptionEligible(u128),
     AdminSigners,
+    UpgradeAdminSigners,
+    Initialized,
+    SchemaVersion,
+    PromptEncryptedPayload(u128, u32),
+    PromptEncryptionVersion(u128),
+    ClassificationOverride(u128),
+    ModeratorAddress,
+    ActivePromotion(u128),
+    PromotionHistory(u128),
+    CreatorStake(u128),
+    PendingUpgrade,
+    UpgradeProposer,
+    UpgradeProposedAt,
+    Discount(u128),
+    // #192 – per-prompt price history log.
+    PromptExpiryWarning(u128),
+    PriceHistory(u128),
+    // #195 – emergency pause timelock
+    PendingUnpauseAt,
+}
+
+/// #192 – A single recorded price change for a prompt.
+///
+/// Appended to the prompt's price-history log whenever the creator changes the
+/// base listing price (and once with the prompt's initial price at creation)
+/// so buyers can see how the price has trended over time.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PriceHistoryEntry {
+    /// Price in stroops immediately before the change.
+    pub previous_price: i128,
+    /// Price in stroops after the change (or the initial listing price).
+    pub new_price: i128,
+    /// Ledger timestamp when the change was recorded.
+    pub changed_at: u64,
+    /// Monotonic per-prompt sequence number, starting at 1 for the initial
+    /// listing price. Used to keep history entries ordered and de-duplicated.
+    pub seq: u64,
 }
 
 #[contracttype]
@@ -313,12 +372,38 @@ pub struct Stake {
     pub staked_at: u64,
 }
 
+/// Moderator-attested classification that overrides the creator's attestation.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClassificationOverride {
+    pub classifier: Address,
+    pub classification: String,
+    pub safety_flags: Vec<String>,
+    pub reason: String,
+    pub reviewed_at: u64,
+}
+
+/// Time-windowed listing discount. While the ledger sequence is inside
+/// `[start_ledger, end_ledger]`, purchases use `discounted_price`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Discount {
+    pub prompt_id: u128,
+    pub creator: Address,
+    pub discounted_price: i128,
+    pub start_ledger: u32,
+    pub end_ledger: u32,
+}
+
 pub trait PromptHashTrait {
     fn __constructor(
         env: Env,
-        admin: Address,
-        admin_two: Address,
-        admin_three: Address,
+        config_admin: Address,
+        config_admin_two: Address,
+        config_admin_three: Address,
+        upgrade_admin: Address,
+        upgrade_admin_two: Address,
+        upgrade_admin_three: Address,
         fee_wallet: Address,
         xlm_sac: Address,
     ) -> Result<(), Error>;
@@ -359,6 +444,9 @@ pub trait PromptHashTrait {
         price_stroops: i128,
     ) -> Result<(), Error>;
 
+    // #192 – Return the recorded price history for a prompt, oldest first.
+    fn get_price_history(env: Env, prompt_id: u128) -> Result<Vec<PriceHistoryEntry>, Error>;
+
     fn buy_prompt(
         env: Env,
         buyer: Address,
@@ -384,6 +472,19 @@ pub trait PromptHashTrait {
         new_expires_at: u64,
     ) -> Result<(), Error>;
 
+    /// Extend a prompt's expiry by `extension_secs` from its current expiry.
+    /// A never-expiring prompt (`expires_at == 0`) cannot be extended.
+    fn extend_prompt_lifetime(
+        env: Env,
+        creator: Address,
+        prompt_id: u128,
+        extension_secs: u64,
+    ) -> Result<u64, Error>;
+
+    /// Emit the expiry warning event when a prompt is within its warning
+    /// window. Anyone may call this for off-chain indexing services.
+    fn check_prompt_expiry(env: Env, prompt_id: u128) -> Result<bool, Error>;
+
     /// Purchase multiple prompts atomically in a single transaction.
     /// `prompt_ids` and `payment_amounts` must have equal length.
     /// An optional `referrer` applies to every prompt in the batch.
@@ -405,10 +506,17 @@ pub trait PromptHashTrait {
     ) -> Result<(), Error>;
 
     fn has_access(env: Env, user: Address, prompt_id: u128) -> Result<bool, Error>;
+    fn revoke_access(
+        env: Env,
+        caller: Address,
+        prompt_id: u128,
+        buyer: Address,
+    ) -> Result<(), Error>;
     fn get_prompt(env: Env, prompt_id: u128) -> Result<Prompt, Error>;
-    fn get_all_prompts(env: Env) -> Result<Vec<Prompt>, Error>;
+    fn get_all_prompts(env: Env, start_index: u128, limit: u32) -> Result<(Vec<Prompt>, u128), Error>;
     fn get_prompts_by_creator(env: Env, creator: Address) -> Result<Vec<Prompt>, Error>;
     fn get_prompts_by_buyer(env: Env, buyer: Address) -> Result<Vec<Prompt>, Error>;
+    fn get_prompts_by_category(env: Env, category: String) -> Result<Vec<Prompt>, Error>;
     fn get_purchase_details(env: Env, prompt_id: u128, buyer: Address) -> Result<Purchase, Error>;
     fn configure_subscription_pass(
         env: Env,
@@ -459,6 +567,13 @@ pub trait PromptHashTrait {
     fn get_fee_wallet(env: Env) -> Option<Address>;
     fn set_referral_percentage(env: Env, new_referral_percentage: u32) -> Result<(), Error>;
     fn get_referral_percentage(env: Env) -> u32;
+    fn set_price_bounds(env: Env, approver_a: Address, approver_b: Address, min_price: Option<i128>, max_price: Option<i128>) -> Result<(), Error>;
+    fn get_price_bounds(env: Env) -> (Option<i128>, Option<i128>);
+    fn register_referral_code(
+        env: Env,
+        referrer: Address,
+        code_hash: BytesN<32>,
+    ) -> Result<(), Error>;
     fn set_pause_status(
         env: Env,
         paused: bool,
@@ -480,12 +595,27 @@ pub trait PromptHashTrait {
         hashed_code: BytesN<32>,
     ) -> Result<(), Error>;
     fn get_xlm_sac(env: Env) -> Option<Address>;
-    fn upgrade(
+    /// Propose a timelocked contract upgrade. Requires 2-of-3 upgrade-admin multisig.
+    /// Records the pending WASM hash, the proposer (via the two approvers) and
+    /// the proposal timestamp so that `confirm_upgrade` can enforce a safety
+    /// cooldown and validate the existing on-chain state before deploying the
+    /// new implementation.
+    fn propose_upgrade(
         env: Env,
         new_wasm_hash: BytesN<32>,
         approver_a: Address,
         approver_b: Address,
     ) -> Result<(), Error>;
+    /// Confirm and execute a previously proposed upgrade once the timelock
+    /// cooldown has elapsed. Requires 2-of-3 upgrade-admin multisig. Applies upgrade
+    /// safety checks (implementation validity, storage integrity, license-holder
+    /// preservation) before atomically swapping the contract bytecode.
+    fn confirm_upgrade(env: Env, approver_a: Address, approver_b: Address) -> Result<(), Error>;
+    /// Cancel a pending upgrade before the timelock elapses (emergency abort).
+    /// Requires 2-of-3 upgrade-admin multisig. Clears the pending upgrade state.
+    fn cancel_upgrade(env: Env, approver_a: Address, approver_b: Address) -> Result<(), Error>;
+    /// Returns the currently pending WASM hash, if any.
+    fn get_pending_upgrade(env: Env) -> Option<BytesN<32>>;
     fn extend_ttl(env: Env, key: DataKey) -> Result<(), Error>;
 
     // ─── Bundle methods ──────────────────────────────────────────────────────
@@ -657,6 +787,26 @@ pub trait PromptHashTrait {
 
     /// Read the current stake record for a prompt.
     fn get_stake(env: Env, prompt_id: u128) -> Result<Stake, Error>;
+
+    // ─── #195: Emergency pause with owner override ────────────────────────
+    /// Owner-only. Immediately pauses all purchases and transfers in case of
+    /// vulnerability discovery. Does not require multisig approval so the
+    /// owner can react quickly in emergencies.
+    fn emergency_pause(env: Env) -> Result<(), Error>;
+
+    /// Owner-only. Proposes an unpause with a timelock cooldown. The contract
+    /// remains paused until `confirm_unpause` is called after the cooldown.
+    fn propose_unpause(env: Env) -> Result<(), Error>;
+
+    /// Owner-only. Confirms and executes a previously proposed unpause once
+    /// the timelock cooldown has elapsed.
+    fn confirm_unpause(env: Env) -> Result<(), Error>;
+
+    /// Owner-only. Cancels a pending unpause proposal.
+    fn cancel_unpause(env: Env) -> Result<(), Error>;
+
+    /// Returns the timestamp when unpause was proposed, if any.
+    fn get_pending_unpause(env: Env) -> Option<u64>;
 }
 
 // ─── Bundle on-chain types ───────────────────────────────────────────────────

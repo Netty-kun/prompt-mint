@@ -1,0 +1,57 @@
+version: "3.8"
+
+# Optional monitoring stack for local Grafana + Prometheus + Alertmanager.
+# Does not replace docker-compose.yml. Start with:
+#   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: prompt-mint-prometheus
+    volumes:
+      - ./docs/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docs/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - prompt-mint-network
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: prompt-mint-alertmanager
+    volumes:
+      - ./docs/observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+    ports:
+      - "9093:9093"
+    networks:
+      - prompt-mint-network
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: prompt-mint-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_DEFAULT_THEME: dark
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./docs/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docs/observability/grafana-dashboard.json:/var/lib/grafana/dashboards/prompt-mint.json:ro
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - prompt-mint-network
+
+networks:
+  prompt-mint-network:
+    driver: bridge

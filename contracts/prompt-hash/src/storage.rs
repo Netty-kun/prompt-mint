@@ -1,6 +1,6 @@
 use super::types::{
-    Bundle, BundlePurchase, ClassificationOverride, DataKey, Discount, Error, Prompt,
-    PromptEncryptedPayload, Purchase, ReferralCode, Settlement, Stake, Subscription,
+    Bundle, BundlePurchase, ClassificationOverride, DataKey, Discount, Error, PriceHistoryEntry,
+    Prompt, PromptEncryptedPayload, Purchase, ReferralCode, Settlement, Stake, Subscription,
     SubscriptionConfig,
 };
 use soroban_sdk::{token, Address, BytesN, Env, Vec};
@@ -8,6 +8,10 @@ use soroban_sdk::{token, Address, BytesN, Env, Vec};
 pub const DAY_IN_LEDGERS: u32 = 17280;
 pub const PERSISTENT_BUMP_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
 pub const PERSISTENT_LIFETIME_THRESHOLD: u32 = 7 * DAY_IN_LEDGERS;
+
+/// #192 – Maximum number of price-history entries retained per prompt so the
+/// compact history log in contract storage stays bounded in size.
+pub const MAX_PRICE_HISTORY_LEN: u32 = 20;
 
 pub struct Storage;
 
@@ -20,21 +24,34 @@ fn ensure(condition: bool, error: Error) -> Result<(), Error> {
 }
 
 impl Storage {
-    pub fn set_admin_signers(env: &Env, signers: &Vec<Address>) {
+    pub fn set_config_admin_signers(env: &Env, signers: &Vec<Address>) {
         let key = DataKey::AdminSigners;
         env.storage().persistent().set(&key, signers);
         Self::extend_key_ttl(env, &key);
     }
 
-    pub fn is_admin_signer(env: &Env, signer: &Address) -> bool {
-        let key = DataKey::AdminSigners;
+    pub fn is_config_admin_signer(env: &Env, signer: &Address) -> bool {
+        Self::is_signer(env, &DataKey::AdminSigners, signer)
+    }
+
+    pub fn set_upgrade_admin_signers(env: &Env, signers: &Vec<Address>) {
+        let key = DataKey::UpgradeAdminSigners;
+        env.storage().persistent().set(&key, signers);
+        Self::extend_key_ttl(env, &key);
+    }
+
+    pub fn is_upgrade_admin_signer(env: &Env, signer: &Address) -> bool {
+        Self::is_signer(env, &DataKey::UpgradeAdminSigners, signer)
+    }
+
+    fn is_signer(env: &Env, key: &DataKey, signer: &Address) -> bool {
         let signers: Vec<Address> = env
             .storage()
             .persistent()
-            .get(&key)
+            .get(key)
             .unwrap_or_else(|| Vec::new(env));
-        if env.storage().persistent().has(&key) {
-            Self::extend_key_ttl(env, &key);
+        if env.storage().persistent().has(key) {
+            Self::extend_key_ttl(env, key);
         }
         for index in 0..signers.len() {
             if signers.get(index).unwrap() == signer.clone() {
@@ -42,6 +59,44 @@ impl Storage {
             }
         }
         false
+    }
+
+    pub fn get_min_price(env: &Env) -> Option<i128> {
+        let key = DataKey::MinPrice;
+        let value = env.storage().persistent().get(&key);
+        if env.storage().persistent().has(&key) {
+            Self::extend_key_ttl(env, &key);
+        }
+        value
+    }
+
+    pub fn set_min_price(env: &Env, price: Option<i128>) {
+        let key = DataKey::MinPrice;
+        if let Some(p) = price {
+            env.storage().persistent().set(&key, &p);
+            Self::extend_key_ttl(env, &key);
+        } else {
+            env.storage().persistent().remove(&key);
+        }
+    }
+
+    pub fn get_max_price(env: &Env) -> Option<i128> {
+        let key = DataKey::MaxPrice;
+        let value = env.storage().persistent().get(&key);
+        if env.storage().persistent().has(&key) {
+            Self::extend_key_ttl(env, &key);
+        }
+        value
+    }
+
+    pub fn set_max_price(env: &Env, price: Option<i128>) {
+        let key = DataKey::MaxPrice;
+        if let Some(p) = price {
+            env.storage().persistent().set(&key, &p);
+            Self::extend_key_ttl(env, &key);
+        } else {
+            env.storage().persistent().remove(&key);
+        }
     }
 
     pub fn extend_key_ttl(env: &Env, key: &DataKey) {
@@ -88,6 +143,22 @@ impl Storage {
         Self::extend_key_ttl(env, &key);
     }
 
+    pub fn has_prompt_expiry_warning(env: &Env, prompt_id: u128) -> bool {
+        let key = DataKey::PromptExpiryWarning(prompt_id);
+        env.storage().persistent().has(&key)
+    }
+
+    pub fn set_prompt_expiry_warning(env: &Env, prompt_id: u128) {
+        let key = DataKey::PromptExpiryWarning(prompt_id);
+        env.storage().persistent().set(&key, &true);
+        Self::extend_key_ttl(env, &key);
+    }
+
+    pub fn clear_prompt_expiry_warning(env: &Env, prompt_id: u128) {
+        let key = DataKey::PromptExpiryWarning(prompt_id);
+        env.storage().persistent().remove(&key);
+    }
+
     pub fn get_prompt_counter(env: &Env) -> u128 {
         let key = DataKey::PromptCounter;
         let count = env.storage().persistent().get(&key).unwrap_or(0);
@@ -97,14 +168,37 @@ impl Storage {
         count
     }
 
-    pub fn get_all_prompts(env: &Env) -> Vec<Prompt> {
+    pub fn get_all_prompts(env: &Env, start_index: u128, limit: u32) -> (Vec<Prompt>, u128) {
+        let prompt_count = Self::get_prompt_counter(env);
+        let now = env.ledger().timestamp();
+        let mut prompts = Vec::new(env);
+        
+        let end_index = if start_index.saturating_add(limit as u128) > prompt_count {
+            prompt_count
+        } else {
+            start_index + (limit as u128)
+        };
+
+        for prompt_id in start_index..end_index {
+            if let Some(prompt) = Self::get_prompt(env, prompt_id) {
+                // Skip expired listings (expires_at == 0 means never expires)
+                if prompt.expires_at == 0 || prompt.expires_at >= now {
+                    prompts.push_back(prompt);
+                }
+            }
+        }
+        (prompts, prompt_count)
+    }
+
+    pub fn get_prompts_by_category(env: &Env, category: &String) -> Vec<Prompt> {
         let prompt_count = Self::get_prompt_counter(env);
         let now = env.ledger().timestamp();
         let mut prompts = Vec::new(env);
         for prompt_id in 0..prompt_count {
             if let Some(prompt) = Self::get_prompt(env, prompt_id) {
-                // Skip expired listings (expires_at == 0 means never expires)
-                if prompt.expires_at == 0 || prompt.expires_at >= now {
+                if (prompt.expires_at == 0 || prompt.expires_at >= now)
+                    && prompt.category == category.clone()
+                {
                     prompts.push_back(prompt);
                 }
             }
@@ -659,6 +753,48 @@ impl Storage {
         env.storage().persistent().get(&key).unwrap_or(0)
     }
 
+    // ─── #192: Per-prompt Price History ────────────────────────────────────
+
+    /// Append an entry to a prompt's compact price-history log. The log is
+    /// capped at `MAX_PRICE_HISTORY_LEN` entries, dropping the oldest entries
+    /// once the cap is exceeded.
+    pub fn add_price_history_entry(
+        env: &Env,
+        prompt_id: u128,
+        entry: &PriceHistoryEntry,
+    ) {
+        let key = DataKey::PriceHistory(prompt_id);
+        let mut history: Vec<PriceHistoryEntry> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env));
+        history.push_back(entry.clone());
+        // Keep the log compact: drop the oldest entries once over the cap.
+        if history.len() > MAX_PRICE_HISTORY_LEN {
+            let to_remove = history.len() - MAX_PRICE_HISTORY_LEN;
+            for _ in 0..to_remove {
+                history.remove(0);
+            }
+        }
+        env.storage().persistent().set(&key, &history);
+        Self::extend_key_ttl(env, &key);
+    }
+
+    /// Return the recorded price history for a prompt, oldest first.
+    pub fn get_price_history(env: &Env, prompt_id: u128) -> Vec<PriceHistoryEntry> {
+        let key = DataKey::PriceHistory(prompt_id);
+        let history: Vec<PriceHistoryEntry> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env));
+        if env.storage().persistent().has(&key) {
+            Self::extend_key_ttl(env, &key);
+        }
+        history
+    }
+
     // ─── #275: Creator Reputation Staking ─────────────────────────────────
 
     pub fn get_stake(env: &Env, prompt_id: u128) -> Option<Stake> {
@@ -695,6 +831,28 @@ impl Storage {
 
     pub fn clear_pending_upgrade(env: &Env) {
         let key = DataKey::PendingUpgrade;
+        env.storage().persistent().remove(&key);
+    }
+
+    // ─── #195: Emergency Pause Timelock ──────────────────────────────────
+
+    pub fn set_pending_unpause_at(env: &Env, timestamp: u64) {
+        let key = DataKey::PendingUnpauseAt;
+        env.storage().persistent().set(&key, &timestamp);
+        Self::extend_key_ttl(env, &key);
+    }
+
+    pub fn get_pending_unpause_at(env: &Env) -> Option<u64> {
+        let key = DataKey::PendingUnpauseAt;
+        let ts: Option<u64> = env.storage().persistent().get(&key);
+        if env.storage().persistent().has(&key) {
+            Self::extend_key_ttl(env, &key);
+        }
+        ts
+    }
+
+    pub fn clear_pending_unpause_at(env: &Env) {
+        let key = DataKey::PendingUnpauseAt;
         env.storage().persistent().remove(&key);
     }
 

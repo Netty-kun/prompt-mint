@@ -14,6 +14,8 @@ const { checkRateLimitMock, recordAnalyticsEventMock, metricsMock } = vi.hoisted
     trackRateLimitHit: vi.fn(),
     trackAnalyticsEvent: vi.fn(),
     trackAnalyticsEventRejected: vi.fn(),
+    trackActiveUser: vi.fn(),
+    trackTransactionVolume: vi.fn(),
   },
 }));
 
@@ -111,6 +113,7 @@ describe("POST /api/analytics/events", () => {
       properties: { walletKind: "freighter" },
     });
     expect(metricsMock.trackAnalyticsEvent).toHaveBeenCalledWith("wallet_connected");
+    expect(metricsMock.trackActiveUser).toHaveBeenCalledWith("wallet_connected");
   });
 
   it("rejects a request missing required envelope fields", async () => {

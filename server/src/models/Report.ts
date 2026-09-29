@@ -31,6 +31,35 @@ const reportSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    collaborationNotes: {
+      type: String,
+      default: "",
+      maxlength: 5000,
+    },
+    collaborationNotesUpdatedAt: {
+      type: Date,
+      default: null,
+    },
+    collaborationNotesUpdatedBy: {
+      type: String,
+      default: null,
+      lowercase: true,
+    },
+    assignedReviewer: {
+      type: String,
+      default: null,
+      lowercase: true,
+      index: true,
+    },
+    assignedAt: {
+      type: Date,
+      default: null,
+    },
+    assignedBy: {
+      type: String,
+      default: null,
+      lowercase: true,
+    },
     resolvedAt: {
       type: Date,
       default: null,
@@ -49,7 +78,7 @@ const reportSchema = new mongoose.Schema(
 
 // Index for finding reports by prompt
 reportSchema.index({ promptId: 1, createdAt: -1 });
-reportSchema.index({ status: 1, createdAt: -1 });
+reportSchema.index({ assignedReviewer: 1, status: 1, createdAt: -1 });
 
 const Report = mongoose.models.Report || mongoose.model("Report", reportSchema);
 

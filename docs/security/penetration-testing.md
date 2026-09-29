@@ -30,6 +30,7 @@ explicitly scheduled with the infra owner.
 |---|---|---|
 | Full external penetration test | Quarterly | Calendar (Jan / Apr / Jul / Oct) |
 | Smart contract focused review | Quarterly, aligned with full test | Also triggered ad hoc before any contract upgrade that changes purchase, entitlement, or fund-custody logic |
+| Automated penetration-testing workflow | Continuous | Every PR/push to `main`/`develop` plus weekly Tuesday scan — see `.github/workflows/security-pentest.yml` |
 | Automated dependency & SAST scanning | Continuous | Every PR/push (see `.github/workflows/dependency-scan.yml`) + weekly scheduled scan |
 | Targeted retest of prior findings | Within 2 weeks of remediation | Finding marked "Fixed, pending verification" |
 | Ad hoc / incident-driven test | As needed | Triggered by a confirmed security incident or a newly disclosed vulnerability class affecting our stack |
@@ -134,5 +135,27 @@ severity.
 - [`docs/security-audit.md`](../security-audit.md) — most recent point-in-time audit findings
 - [`docs/security-model.md`](../security-model.md) — ongoing threat model and mitigations
 - [`docs/security-headers.md`](../security-headers.md) — client-side security header configuration
+- [`.github/workflows/security-pentest.yml`](../../.github/workflows/security-pentest.yml) — npm audit, Semgrep SAST, OWASP ZAP DAST, Slither / Soroban contract analysis
 - [`.github/workflows/dependency-scan.yml`](../../.github/workflows/dependency-scan.yml) — continuous dependency vulnerability scanning
 - [`.github/dependabot.yml`](../../.github/dependabot.yml) — automated dependency update configuration
+- [`.github/workflows/contract-gas-benchmarks.yml`](../../.github/workflows/contract-gas-benchmarks.yml) — contract resource-cost regression gate
+- [`docs/contract-gas-benchmarks.md`](../contract-gas-benchmarks.md) — expected CPU/memory ranges per contract operation
+
+## 7. Automated tooling (#230)
+
+The `security-pentest` workflow is the always-on counterpart to the quarterly manual engagement. It is not a substitute for a human pentest; it catches regressions between those windows.
+
+| Tool | Role | Gate |
+|---|---|---|
+| `yarn npm audit` / `npm audit` | Dependency vulnerabilities in the frontend workspace and `server/` | Fails on high or critical advisories |
+| Semgrep | SAST over JS/TS/Rust with OWASP Top 10 + `.semgrep.yml` | Fails on ERROR-severity findings |
+| OWASP ZAP | DAST against the OpenAPI API surface (`scripts/security/dast-target.mjs`) | Fails on High/Critical alerts |
+| Slither | Solidity contract analysis when `.sol` files exist | Fails on high Slither findings |
+| cargo clippy + cargo-audit + Soroban detectors | Contract analysis analog for the Rust/Soroban `prompt-hash` contract | Fails on clippy errors, RustSec advisories, and `unsafe` blocks |
+
+Local entry points:
+
+```bash
+node scripts/security/dast-target.mjs
+bash scripts/security/contract-analysis.sh
+```

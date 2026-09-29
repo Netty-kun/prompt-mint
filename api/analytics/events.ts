@@ -99,6 +99,12 @@ async function handler(req: any, res: any) {
   });
 
   metrics.trackAnalyticsEvent(event);
+  if (event === "wallet_connected" || event === "prompt_viewed") {
+    metrics.trackActiveUser(event);
+  }
+  if (event === "prompt_purchase_completed") {
+    metrics.trackTransactionVolume("purchase");
+  }
   req.logger?.info?.({ event }, "Analytics event recorded");
 
   res.status(202).json({ accepted: true });

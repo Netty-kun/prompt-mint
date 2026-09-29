@@ -66,6 +66,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
     environment:
       NODE_ENV: development
       MONGODB_URI: mongodb://${MONGODB_ROOT_USER:-admin}:${MONGODB_ROOT_PASSWORD:-password}@mongodb:27017/prompt-mint?authSource=admin&replicaSet=rs0
@@ -75,9 +77,20 @@ services:
       PUBLIC_STELLAR_NETWORK_PASSPHRASE: ${PUBLIC_STELLAR_NETWORK_PASSPHRASE:-"Test SDF Network ; September 2015"}
       PUBLIC_STELLAR_RPC_URL: ${PUBLIC_STELLAR_RPC_URL:-https://soroban-testnet.stellar.org}
       PUBLIC_STELLAR_HORIZON_URL: ${PUBLIC_STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-prompt-mint-server}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318}
     volumes:
       - ./server/src:/app/server/src
       - ./server/package.json:/app/server/package.json
+    networks:
+      - prompt-mint-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: prompt-mint-jaeger
+    ports:
+      - "16686:16686"
+      - "4318:4318"
     networks:
       - prompt-mint-network
 

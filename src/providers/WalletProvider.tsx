@@ -13,6 +13,7 @@ import { ALBEDO_ID } from "@creit.tech/stellar-wallets-kit";
 import { useAsyncTransaction } from "../components/useAsyncTransaction";
 import { trackEvent, trackEventWithWallet } from "../lib/analytics/track";
 import { useQueryClient } from "@tanstack/react-query";
+import { WalletAutoLockModal } from "@/components/WalletAutoLockModal";
 
 export type WalletStatus = 
   | "idle" 
@@ -34,8 +35,26 @@ export interface WalletContextType {
   reconnect: () => Promise<void>;
   signTransaction: typeof wallet.signTransaction;
   signMessage: typeof wallet.signMessage;
+  autoLockSecondsLeft: number | null;
+  extendSession: () => void;
 }
 /* eslint-enable no-unused-vars */
+
+// Auto-lock configuration: disconnect the wallet after this idle period.
+const AUTO_LOCK_TIMEOUT_MS = Number(
+  import.meta.env.VITE_WALLET_AUTO_LOCK_MS,
+) || 15 * 60 * 1000;
+// Show the warning modal this many ms before the lock kicks in.
+const AUTO_LOCK_WARNING_MS = Math.min(60_000, AUTO_LOCK_TIMEOUT_MS);
+
+const ACTIVITY_EVENTS: (keyof WindowEventMap)[] = [
+  "mousemove",
+  "mousedown",
+  "keydown",
+  "touchstart",
+  "scroll",
+  "wheel",
+];
 
 const initialState = {
   address: undefined,
@@ -51,12 +70,15 @@ const boundSignMessage = wallet.signMessage.bind(wallet);
 export const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
-  const [state, setState] = useState<Omit<WalletContextType, "connect" | "disconnect" | "reconnect" | "signTransaction" | "signMessage">>(initialState);
+  const [state, setState] = useState<Omit<WalletContextType, "connect" | "disconnect" | "reconnect" | "signTransaction" | "signMessage" | "autoLockSecondsLeft" | "extendSession">>(initialState);
   const isConnectingRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
   const maxReconnectAttempts = 3;
-  const queryClient = useQueryClient();
-  const previousAddressRef = useRef<string | undefined>(undefined);
+
+  const [autoLockSecondsLeft, setAutoLockSecondsLeft] = useState<number | null>(
+    null,
+  );
+  const lastActivityRef = useRef<number>(Date.now());
 
   const { execute: executeDisconnect } = useAsyncTransaction(
     async () => {
@@ -157,6 +179,53 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
       isConnectingRef.current = false;
     }
   }, [executeConnect, state.status]);
+
+  const extendSession = useCallback(() => {
+    lastActivityRef.current = Date.now();
+    setAutoLockSecondsLeft(null);
+  }, []);
+
+  // Auto-lock: disconnect the wallet after a configurable inactivity period.
+  useEffect(() => {
+    if (state.status !== "connected") {
+      setAutoLockSecondsLeft(null);
+      return;
+    }
+
+    lastActivityRef.current = Date.now();
+    setAutoLockSecondsLeft(null);
+
+    const handleActivity = () => {
+      lastActivityRef.current = Date.now();
+      setAutoLockSecondsLeft(null);
+    };
+
+    ACTIVITY_EVENTS.forEach((event) =>
+      window.addEventListener(event, handleActivity, { passive: true }),
+    );
+
+    const interval = window.setInterval(() => {
+      const idleFor = Date.now() - lastActivityRef.current;
+      if (idleFor >= AUTO_LOCK_TIMEOUT_MS) {
+        setAutoLockSecondsLeft(null);
+        void disconnect();
+        return;
+      }
+      const remaining = AUTO_LOCK_TIMEOUT_MS - idleFor;
+      if (remaining <= AUTO_LOCK_WARNING_MS) {
+        setAutoLockSecondsLeft(Math.ceil(remaining / 1000));
+      } else {
+        setAutoLockSecondsLeft(null);
+      }
+    }, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+      ACTIVITY_EVENTS.forEach((event) =>
+        window.removeEventListener(event, handleActivity),
+      );
+    };
+  }, [state.status, disconnect]);
 
   const checkExtensionAccount = useCallback(async () => {
     if (state.status !== "connected" && state.status !== "reconnecting") return;
@@ -346,9 +415,16 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
       reconnect,
       signTransaction: boundSignTransaction,
       signMessage: boundSignMessage,
+      autoLockSecondsLeft,
+      extendSession,
     }),
-    [state, connect, disconnect, reconnect]
+    [state, connect, disconnect, reconnect, autoLockSecondsLeft, extendSession]
   );
 
-  return <WalletContext.Provider value={contextValue}>{children}</WalletContext.Provider>;
+  return (
+    <WalletContext.Provider value={contextValue}>
+      {children}
+      <WalletAutoLockModal />
+    </WalletContext.Provider>
+  );
 };

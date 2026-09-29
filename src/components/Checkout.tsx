@@ -10,15 +10,12 @@ import {
   AlertTriangle,
   RefreshCw,
   Wallet,
-  ArrowRight,
 } from 'lucide-react';
 import {
   validateCheckout,
   type CheckoutSummary,
-  type CheckoutItemValidation,
 } from '@/lib/checkout/validation';
 import { PromptHashClient } from '@/lib/stellar/promptHashClient';
-import { browserStellarConfig } from '@/lib/stellar/browserConfig';
 import { useNetworkState } from '@/hooks/useNetworkState';
 import { detectNetworkMismatch } from '@/lib/wallet/networkDetection';
 import { useWallet } from '@/hooks/useWallet';
@@ -28,6 +25,12 @@ import { translateError } from '@/lib/i18n-errors';
 import { estimateBulkFee, type FeeEstimate } from '@/lib/checkout/feeEstimation';
 import { FeeEstimateBanner } from '@/components/FeeEstimateBanner';
 import { TransactionProgress } from '@/components/TransactionProgress';
+import { useContext } from 'react';
+import { NotificationContext } from '@/providers/NotificationProvider';
+import {
+  showPurchaseSuccessToast,
+  showPurchaseErrorToast,
+} from '@/lib/notifications/purchaseToast';
 import type { TransactionStepId } from '@/lib/checkout/transactionSteps';
 
 const promptImageFallback = '/images/codeguru.png';
@@ -51,6 +54,7 @@ interface CheckoutProps {
 }
 
 export function Checkout({ onClose }: CheckoutProps) {
+  const notificationContext = useContext(NotificationContext);
   const { state, removeItem, clearCart, setCheckingOut, totalStroops, itemCount } = useCart();
   const { address, signTransaction } = useWallet();
   const queryClient = useQueryClient();
@@ -162,21 +166,40 @@ export function Checkout({ onClose }: CheckoutProps) {
       if (allSuccess) {
         clearCart();
         queryClient.invalidateQueries({ queryKey: ['purchased-prompts'] });
+        showPurchaseSuccessToast(bulkResult.txHash, {
+          title: `Checkout Successful! (${items.length} ${items.length === 1 ? 'item' : 'items'})`,
+        });
+        notificationContext?.notifyEvent({
+          category: 'purchase',
+          title: 'Purchase Successful',
+          message: `Purchased ${items.length} item(s). Tx: ${bulkResult.txHash}`,
+        });
+      } else {
+        showPurchaseErrorToast('Some items in your cart failed to complete purchase.', {
+          title: 'Purchase Incomplete',
+        });
+        notificationContext?.notifyEvent({
+          category: 'purchase',
+          title: 'Purchase Incomplete',
+          message: 'Some items in your cart failed to complete purchase.',
+        });
       }
 
       setStep('complete');
     } catch (error) {
       setTxStepError(true);
-      setGlobalError(translateError(error instanceof Error ? error.message : 'Purchase failed'));
+      const translatedMsg = translateError(error instanceof Error ? error.message : 'Purchase failed');
+      setGlobalError(translatedMsg);
+      showPurchaseErrorToast(translatedMsg);
+      notificationContext?.notifyEvent({
+        category: 'purchase',
+        title: 'Purchase Failed',
+        message: translatedMsg,
+      });
       setStep('error');
     } finally {
       setCheckingOut(false);
     }
-  };
-
-  const handleRetryValidation = () => {
-    setSummary(null);
-    validateItems();
   };
 
   const handleRemoveInvalidItems = () => {

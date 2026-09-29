@@ -1,0 +1,69 @@
+{
+  "title": "PromptMint production",
+  "description": "RPC latency, error rates, active users, transaction volume, and API endpoint health.",
+  "layout_type": "ordered",
+  "notify_list": ["pagerduty-promptmint"],
+  "tags": ["prompt-mint", "stellar", "team:platform"],
+  "widgets": [
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "RPC call latency",
+        "requests": [
+          {
+            "q": "p99:rpc_call_duration_ms{*} by {method}",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Error rates",
+        "requests": [
+          {
+            "q": "sum:api_request_error_total{*}.as_rate() by {path}",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Active users",
+        "requests": [
+          {
+            "q": "sum:active_users_total{*}.as_count() by {surface}",
+            "display_type": "bars"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Transaction volume",
+        "requests": [
+          {
+            "q": "sum:transaction_volume_total{*}.as_count() by {kind}",
+            "display_type": "bars"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "API endpoint health",
+        "requests": [
+          {
+            "q": "min:api_endpoint_health{*} by {path}",
+            "aggregator": "min"
+          }
+        ]
+      }
+    }
+  ]
+}

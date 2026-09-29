@@ -6,6 +6,9 @@ import User from "../models/User";
 import { IndexerState } from "../models/IndexerState";
 import { scanForSimilarity } from "./similarityDetection";
 import { recordMarketplaceTransaction } from "./transactionHistoryService";
+import { invalidatePromptMetadata } from "./cacheService";
+import { dispatchEvent } from "./webhookDispatcher";
+import { notifyPromptPurchased } from "./emailNotifications";
 
 const CONTRACT_ID = process.env.PUBLIC_PROMPT_HASH_CONTRACT_ID;
 const rpc = new Server(process.env.PUBLIC_STELLAR_RPC_URL!, { timeout: 15_000 });
@@ -106,14 +109,24 @@ async function processEvent(event: any) {
           console.error("[similarity] Scan error for prompt", prompt_id.toString(), err),
         );
       }
+      await invalidatePromptMetadata(String(upserted?._id ?? prompt_id));
+
+      void dispatchEvent(creator, "PromptCreated", {
+        prompt_id,
+        creator,
+        price_stroops,
+      }).catch((err) =>
+        console.error("[indexer] PromptCreated webhook dispatch failed:", err),
+      );
       break;
     }
 
     case "PromptPurchased": {
-      const { prompt_id, buyer } = data;
-      await Prompt.findOneAndUpdate(
+      const { prompt_id, buyer, creator } = data;
+      const updatedPrompt = await Prompt.findOneAndUpdate(
         { onChainId: prompt_id.toString() },
         { $inc: { salesCount: 1 } },
+        { new: true },
       );
       if (buyer && event.txHash) {
         await Purchase.updateOne(
@@ -130,24 +143,63 @@ async function processEvent(event: any) {
           { upsert: true },
         );
       }
+      await invalidatePromptMetadata(String(updatedPrompt?._id ?? prompt_id));
+
+      if (buyer && creator) {
+        void dispatchEvent(creator, "PromptPurchased", {
+          prompt_id,
+          buyer,
+          creator,
+          txHash: event.txHash,
+        }).catch((err) =>
+          console.error("[indexer] PromptPurchased webhook dispatch failed:", err),
+        );
+
+        const prompt = await Prompt.findOne({
+          onChainId: prompt_id.toString(),
+        }).lean();
+        void notifyPromptPurchased(creator, {
+          buyerWallet: buyer,
+          promptTitle: prompt?.title ?? `Prompt #${prompt_id}`,
+          promptId: prompt_id.toString(),
+          txHash: event.txHash,
+        }).catch((err) =>
+          console.error("[indexer] PromptPurchased email notification failed:", err),
+        );
+      }
       break;
     }
 
     case "PromptPriceUpdated": {
       const { prompt_id, price_stroops } = data;
-      await Prompt.findOneAndUpdate(
+      const updatedPrompt = await Prompt.findOneAndUpdate(
         { onChainId: prompt_id.toString() },
         { $set: { price: Number(price_stroops) / 10_000_000 } },
+        { new: true },
+      );
+      await invalidatePromptMetadata(String(updatedPrompt?._id ?? prompt_id));
+
+      const prompt = await Prompt.findOne({
+        onChainId: prompt_id.toString(),
+      }).lean();
+      const creator = prompt?.owner?.walletAddress ?? "";
+      void dispatchEvent(creator, "PromptPriceUpdated", {
+        prompt_id,
+        price_stroops,
+      }).catch((err) =>
+        console.error("[indexer] PromptPriceUpdated webhook dispatch failed:", err),
       );
       break;
     }
 
     case "PromptSaleStatusUpdated": {
       const { prompt_id, active } = data;
-      await Prompt.findOneAndUpdate(
+      const updatedPrompt = await Prompt.findOneAndUpdate(
         { onChainId: prompt_id.toString() },
         { $set: { isActive: active } },
+        { new: true },
       );
+      await invalidatePromptMetadata(String(updatedPrompt?._id ?? prompt_id));
       break;
     }
 

@@ -2,7 +2,7 @@ import httpMocks from "node-mocks-http";
 import { GetPromptDetail } from "../controllers/controllers";
 import Prompt from "../models/Prompt";
 import connectDb from "../db/connectDb";
-import { cacheGet, cacheSet, CACHE_KEYS } from "../services/cacheService";
+import { cacheGet, cacheSet, CACHE_KEYS, PROMPT_METADATA_TTL_SECONDS } from "../services/cacheService";
 
 jest.mock("../models/User");
 jest.mock("../models/Prompt");
@@ -65,7 +65,7 @@ describe("GetPromptDetail", () => {
     expect(cacheSet).toHaveBeenCalledWith(
       CACHE_KEYS.promptDetail(promptId),
       expect.any(String),
-      60,
+      PROMPT_METADATA_TTL_SECONDS,
     );
   });
 

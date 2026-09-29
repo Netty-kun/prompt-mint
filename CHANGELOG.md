@@ -9,6 +9,8 @@ All notable changes to PromptHash Stellar are documented in this file. This proj
 - Third-party integration guide with SDK examples
 - User-facing FAQ and knowledge base
 - Automated changelog generation with changesets
+- Automated rollback on CI deploy failure (last known-good, Slack/Discord, incident ticket)
+- Datadog and Grafana dashboards plus PagerDuty alerts for RPC latency, error rates, active users, transaction volume, and API health
 
 ---
 

@@ -7,6 +7,7 @@ import {
   verifyModeratorAuth,
 } from "./data";
 import { withBodySizeLimit } from "../../src/lib/api/bodySizeLimit";
+import { metrics } from "../../src/lib/observability/metrics";
 
 type Action =
   | "review_removed"
@@ -105,10 +106,18 @@ async function handler(req: any, res: any) {
         ok = false;
       } else {
         const status = item.action === "report_resolved" ? "resolved" : "dismissed";
-        updateReportStatus(report.id, status, {
+        const updated = updateReportStatus(report.id, status, {
           resolvedBy: moderatorAddress ?? "",
           resolution: item.reason.trim(),
         });
+        if (updated) {
+          // Abuse report response SLA: time from filing to moderator response.
+          metrics.trackAbuseReportResponse(
+            updated.targetType,
+            status,
+            updated.updatedAt - updated.createdAt,
+          );
+        }
       }
     } else if (item.targetType === "prompt") {
       const nextStatus = item.action === "prompt_takedown" ? "taken_down" : "active";

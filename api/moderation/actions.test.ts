@@ -11,6 +11,7 @@ import {
   getModerationLogs,
   setPromptModerationState,
 } from "./data";
+import { metrics } from "../../src/lib/observability/metrics";
 
 const moderator = Keypair.random();
 
@@ -52,6 +53,7 @@ async function invoke(body: Record<string, unknown>) {
 describe("moderation actions endpoint", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    metrics._resetForTests();
     process.env.MODERATOR_ADDRESSES = moderator.publicKey();
   });
 
@@ -113,5 +115,74 @@ describe("moderation actions endpoint", () => {
     });
     expect(statusCode).toBe(200);
     expect(getPromptModerationState("prompt_rt").status).toBe("active");
+  });
+
+  it("emits an abuse report response SLA metric when a report is resolved", async () => {
+    const report = addReport({
+      reporterAddress: "GREPORTER1",
+      targetType: "prompt",
+      targetId: "prompt_sla",
+      reason: "spam",
+    });
+    // Backdate the filing time so the response duration is measurable.
+    report.createdAt = Date.now() - 60_000;
+
+    const proof = moderatorProof(moderator, "moderation-action");
+    const { statusCode } = await invoke({
+      ...proof,
+      confirmed: true,
+      actions: [{ action: "report_resolved", targetId: report.id, targetType: "report", reason: "Reviewed" }],
+    });
+    expect(statusCode).toBe(200);
+
+    const names = metrics.snapshot().map((s) => s.name);
+    expect(names).toContain("abuse_report_response_duration_ms");
+    expect(names).toContain("abuse_report_responded_total");
+
+    const durationSample = metrics.snapshot().find((s) => s.name === "abuse_report_response_duration_ms");
+    expect(durationSample?.value).toBeGreaterThanOrEqual(60_000);
+    expect(durationSample?.labels.targetType).toBe("prompt");
+    expect(durationSample?.labels.outcome).toBe("resolved");
+
+    const counterSample = metrics.snapshot().find((s) => s.name === "abuse_report_responded_total");
+    expect(counterSample?.value).toBe(1);
+    expect(counterSample?.labels.outcome).toBe("resolved");
+  });
+
+  it("emits an abuse report response SLA metric when a report is dismissed", async () => {
+    const report = addReport({
+      reporterAddress: "GREPORTER2",
+      targetType: "review",
+      targetId: "review_sla",
+      reason: "copyright",
+    });
+    report.createdAt = Date.now() - 30_000;
+
+    const proof = moderatorProof(moderator, "moderation-action");
+    const { statusCode } = await invoke({
+      ...proof,
+      confirmed: true,
+      actions: [{ action: "report_dismissed", targetId: report.id, targetType: "report", reason: "No violation" }],
+    });
+    expect(statusCode).toBe(200);
+
+    const durationSample = metrics.snapshot().find((s) => s.name === "abuse_report_response_duration_ms");
+    expect(durationSample?.value).toBeGreaterThanOrEqual(30_000);
+    expect(durationSample?.labels.targetType).toBe("review");
+    expect(durationSample?.labels.outcome).toBe("dismissed");
+  });
+
+  it("does not emit abuse report SLA metrics for non-report actions", async () => {
+    const proof = moderatorProof(moderator, "moderation-action");
+    const { statusCode } = await invoke({
+      ...proof,
+      confirmed: true,
+      actions: [{ action: "prompt_takedown", targetId: "prompt_no_sla", targetType: "prompt", reason: "Copyright" }],
+    });
+    expect(statusCode).toBe(200);
+
+    const names = metrics.snapshot().map((s) => s.name);
+    expect(names).not.toContain("abuse_report_response_duration_ms");
+    expect(names).not.toContain("abuse_report_responded_total");
   });
 });

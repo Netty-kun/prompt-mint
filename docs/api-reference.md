@@ -224,6 +224,53 @@ Returns draft and ready-to-publish prompts for the connected creator wallet.
 
 ## Moderation Endpoints
 
+### Request a review appeal challenge
+
+`POST /api/reviews/appeal-challenge`
+
+Send `{ "address": "g...", "reviewId": "review_..." }` to receive a
+short-lived wallet-signing challenge. Only the review author can request a
+challenge, and the review must have an `edited` or `removed` moderation decision.
+
+### Submit a review appeal
+
+`POST /api/reviews/appeals`
+
+Send `{ "address", "reviewId", "reason", "token", "signedMessage", "attachments" }`.
+The signed challenge must match the review and wallet. The reason must be 20–3,000
+characters. `attachments` is an optional array of `{ "name", "size", "content" }`
+where `content` is base64. Up to three PDF, PNG, JPEG, WebP, or plain-text files
+are accepted, with a 1 MB per-file and 3 MB total limit. File content is checked
+before it is stored with the appeal in MongoDB. A review can have one appeal per
+appellant wallet; successful submissions return an appeal ID and `submitted`
+status.
+
+Review list entries may include an optional `moderation` object when a moderation
+action has a public-facing outcome. It contains a `status` (`approved` or `removed`),
+a user-facing `reason`, the moderator address, and an `updatedAt` timestamp. Internal
+moderator notes should not be included in this object.
+Removed reviews are returned only as redacted decision notices and do not count
+toward public rating statistics.
+
+### Export review edit history
+
+`POST /api/reviews/audit-export-challenge`
+
+Request `{ "address": "g..." }` to receive a short-lived wallet-signing challenge.
+The address must be listed in `MODERATOR_ADDRESSES`.
+
+`POST /api/reviews/audit-export`
+
+Send `{ "address": "g...", "token": "...", "signedMessage": "..." }` from
+the challenge response and the wallet signature to download the CSV.
+
+The CSV contains seller-response edits, including the editor, prompt and review IDs,
+timestamp, and before/after text. The address must be listed in the
+`MODERATOR_ADDRESSES` environment variable, and the serverless API must have
+`MONGODB_URI` and `CHALLENGE_TOKEN_SECRET` configured. Audit records are written before an edited response is
+updated; if the audit write fails, the edit is rejected. Initial seller responses
+are not edits and are not included.
+
 ### Submit a prompt report
 
 `POST /api/moderation/reports`

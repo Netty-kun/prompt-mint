@@ -127,3 +127,5 @@ When an exception is fixed, remove its row. The test fails if a listed exception
 - [Smart Contract Architecture](./smart-contract-architecture.md)
 - [Deploy Manifest](./deploy-manifest.md) and [Artifact Verification](./artifact-verification.md): how Release & Ops ties builds to deployments
 - [Contributor Onboarding Quickstart](./contributor-onboarding-quickstart.md)
+- [Translator Contribution Guide](./translator-contribution-guide.md): translating UI strings, the onboarding email copy decks, and docs
+- [Buyer Onboarding Email Copy Deck](./buyer-onboarding-email-copy-deck.md) and [Creator Onboarding Email Copy Deck](./creator-onboarding-email-copy-deck.md)

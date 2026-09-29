@@ -8,6 +8,7 @@ export interface StoredReview {
   verified: boolean;
   helpfulVotes: number;
   voters: string[];
+  helpfulVoteActivity?: Array<{ voterAddress: string; votedAt: number }>;
   editedAt?: number;
   editHistory: ReviewEditAuditEntry[];
   moderation?: {
@@ -21,6 +22,19 @@ export interface StoredReview {
     createdAt: number;
     editedAt?: number;
   };
+}
+
+export const HELPFUL_VOTE_ALERT_THRESHOLD = 5;
+export const HELPFUL_VOTE_ALERT_WINDOW_MS = 10 * 60 * 1000;
+export const HELPFUL_VOTE_ACTIVITY_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+export function hasHelpfulVoteManipulationAlert(review: StoredReview, now = Date.now()): boolean {
+  const recentVoters = new Set(
+    (review.helpfulVoteActivity ?? [])
+      .filter((activity) => now - activity.votedAt <= HELPFUL_VOTE_ALERT_WINDOW_MS)
+      .map((activity) => activity.voterAddress.toLowerCase()),
+  );
+  return recentVoters.size >= HELPFUL_VOTE_ALERT_THRESHOLD;
 }
 
 /** Immutable snapshots retained whenever an author changes a review. */
@@ -58,6 +72,12 @@ function seedMockReviews() {
       helpfulVotes: 1,
       voters: [],
       editHistory: [],
+      moderation: {
+        status: "removed",
+        moderatorAddress: "gmoderator1",
+        reason: "Inappropriate content",
+        updatedAt: Date.now() - 86400000 * 3,
+      },
     },
     {
       id: "review_3",

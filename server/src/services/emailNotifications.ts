@@ -41,6 +41,15 @@ export interface UpdatePayload {
   versionIndex: number;
 }
 
+export interface WeeklyCreatorDigestPayload {
+  weekStart: string;
+  weekEnd: string;
+  salesCount: number;
+  revenueStroops: number;
+  buyerCount: number;
+  topPromptTitle: string;
+}
+
 // ── Transport ─────────────────────────────────────────────────────────────────
 
 function createTransport() {
@@ -115,15 +124,10 @@ export function buildUpdateEmail(payload: UpdatePayload, wallet: string): {
 
 // ── Core send helper ──────────────────────────────────────────────────────────
 
-async function sendEmail(
-  to: string,
-  subject: string,
-  html: string,
-  unsubscribeUrl?: string
-): Promise<void> {
+async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   if (!process.env.EMAIL_SMTP_HOST) {
     console.warn("[email] SMTP not configured — skipping email to", to);
-    return;
+    return false;
   }
   await smtpBreaker.execute(async () => {
     const transport = createTransport();
@@ -142,6 +146,38 @@ async function sendEmail(
     });
   });
   console.log(`[email] Sent "${subject}" to ${to}`);
+  return true;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character]!);
+}
+
+export async function sendWeeklyCreatorMetricsDigest(
+  to: string,
+  payload: WeeklyCreatorDigestPayload,
+): Promise<boolean> {
+  const revenueXlm = (payload.revenueStroops / 10_000_000)
+    .toFixed(7)
+    .replace(/\.?0+$/, "") || "0";
+  const subject = `Your weekly PromptHash creator metrics: ${payload.weekStart}`;
+  const html = `
+    <h2>Your creator metrics for ${escapeHtml(payload.weekStart)} to ${escapeHtml(payload.weekEnd)}</h2>
+    <ul>
+      <li>Sales: ${payload.salesCount}</li>
+      <li>Revenue: ${revenueXlm} XLM</li>
+      <li>Unique buyers: ${payload.buyerCount}</li>
+      <li>Top listing: ${escapeHtml(payload.topPromptTitle)}</li>
+    </ul>
+    <p>Manage this digest in your notification preferences.</p>
+  `;
+  return sendEmail(to, subject, html);
 }
 
 // ── User preference helpers ───────────────────────────────────────────────────

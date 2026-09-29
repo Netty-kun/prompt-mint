@@ -17,6 +17,8 @@ const CreatorSharePage = lazy(() => import("./pages/creator/page.tsx"));
 const ComparePage = lazy(() => import("./pages/compare/page.tsx"));
 const StatusPage = lazy(() => import("./pages/status/page.tsx"));
 const ModerationPage = lazy(() => import("./pages/Moderation.tsx"));
+const ReviewPolicyPage = lazy(() => import("./pages/ReviewPolicy.tsx"));
+const AppealsPage = lazy(() => import("./pages/Appeals.tsx"));
 const ApiKeysPage = lazy(() => import("./pages/settings/ApiKeys.tsx"));
 const WebhookReplayConsolePage = lazy(() => import("./pages/settings/WebhookReplayConsole.tsx"));
 const TransactionHistoryPage = lazy(() => import("./pages/history/page.tsx"));
@@ -163,6 +165,22 @@ function ApplicationShell() {
             element={
               <SuspenseRoute routeName="Moderation">
                 <ModerationPage />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="/review-policy"
+            element={
+              <SuspenseRoute routeName="Review Policy">
+                <ReviewPolicyPage />
+              </SuspenseRoute>
+            }
+          />
+          <Route
+            path="/appeals"
+            element={
+              <SuspenseRoute routeName="Appeals">
+                <AppealsPage />
               </SuspenseRoute>
             }
           />

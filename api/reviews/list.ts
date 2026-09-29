@@ -42,6 +42,9 @@ export default async function handler(req: any, res: any) {
     }
 
     const visibleReviews = reviews.filter((review) => review.moderation?.status !== "removed");
+    const removedReviews = reviews
+      .filter((review) => review.moderation?.status === "removed")
+      .sort((a, b) => b.createdAt - a.createdAt);
     const filteredReviews = rating ? visibleReviews.filter((review) => review.rating === rating) : visibleReviews;
     const sortedReviews = [...filteredReviews].sort((a, b) => {
       const byId = a.id.localeCompare(b.id);
@@ -66,6 +69,9 @@ export default async function handler(req: any, res: any) {
     res.status(200).json(
       withVersion({
         reviews: pagedReviews.map((r) => ({
+    res.status(200).json(withVersion({
+      reviews: [
+        ...pagedReviews.map((r) => ({
           id: r.id,
           promptId: r.promptId,
           userAddress: r.userAddress,
@@ -93,6 +99,38 @@ export default async function handler(req: any, res: any) {
         filters: { sort, rating: rating ?? null },
       }, version),
     );
+          editedAt: r.editedAt,
+          moderation: r.moderation || null,
+          sellerResponse: r.sellerResponse || null,
+        })),
+        ...removedReviews.map((r) => ({
+          id: r.id,
+          promptId: r.promptId,
+          userAddress: "",
+          rating: 0,
+          text: "",
+          createdAt: r.createdAt,
+          verified: false,
+          helpfulVotes: 0,
+          editedAt: r.editedAt,
+          moderation: r.moderation || null,
+          sellerResponse: null,
+        })),
+      ],
+      stats: {
+        total: visibleReviews.length,
+        averageRating: Math.round(averageRating * 10) / 10,
+        distribution: {
+          5: visibleReviews.filter((r) => r.rating === 5).length,
+          4: visibleReviews.filter((r) => r.rating === 4).length,
+          3: visibleReviews.filter((r) => r.rating === 3).length,
+          2: visibleReviews.filter((r) => r.rating === 2).length,
+          1: visibleReviews.filter((r) => r.rating === 1).length,
+        },
+      },
+      pagination: { page, limit, total, totalPages, hasMore: page < totalPages },
+      filters: { sort, rating: rating ?? null },
+    }, version));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch reviews";
     console.error("Review fetch error:", message);
